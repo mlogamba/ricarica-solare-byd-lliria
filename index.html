@@ -73,7 +73,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <div class="metric"><div class="muted">Batteria casa a fine piano</div><div class="v" id="finalHome">—</div><div class="bar"><span id="homeBar"></span></div></div>
 <div class="metric"><div class="muted">Produzione FV stimata nella finestra</div><div class="v" id="solarEnergy">—</div></div>
 <div class="metric"><div class="muted">Prelevata dalla batteria casa</div><div class="v" id="battOut">—</div></div>
-<div class="metric"><div class="muted">Carico casa non coperto</div><div class="v" id="gridOut">—</div></div>
+<div class="metric"><div class="muted">Carico casa non coperto (blackout)</div><div class="v" id="gridOut">—</div></div>
 </div>
 <div id="status" class="status warn">Premi "Calcola piano" per ottenere una stima.</div>
 <p id="explain" class="muted"></p>
@@ -87,7 +87,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 
 <section class="card">
 <h2>4. Bilancio orario stimato</h2>
-<div class="tablewrap"><table><thead><tr><th>Ora</th><th>FV (kW)</th><th>Auto (kW)</th><th>Casa (kW)</th><th>Da batteria casa (kW)</th><th>Carica batteria casa (kW)</th><th>Eccedenza FV non usata (kW)</th><th>Corrente auto (A)</th><th>Casa (%)</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>Ora</th><th>FV (kW)</th><th>Casa (kW)</th><th>Auto (kW)</th><th>FV → Casa</th><th>FV → Auto</th><th>Batt → Casa</th><th>Batt → Auto</th><th>FV → Batt</th><th>Corrente auto (A)</th><th>Casa (%)</th></tr></thead><tbody id="rows"></tbody></table></div>
 </section>
 
 <section class="card">
@@ -96,9 +96,9 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <ul>
 <li>Fotovoltaico: 10 × 450 W = 4,5 kWp; picco massimo osservato 3,5 kW (usato come tetto).</li>
 <li>Curva solare: calcolata automaticamente per Llíria con dati online (Open-Meteo) e scalata in modo coerente con la localizzazione. La stima è aggiornata dalla previsione disponibile, senza campi manuali.</li>
-<li>Impianto isolato: nessuna rete. La casa ha la priorità, poi la batteria domestica, e solo dopo il residuo l'auto può ricevere energia. Se la batteria domestica raggiunge la riserva minima, la casa va in blackout e la ricarica dell'auto si ferma.</li>
+<li>Impianto isolato: nessuna rete. Bilancio energetico orario rigido: Energia disponibile (FV + batteria scarica) = Energia richiesta (casa + auto). Casa prioritaria su auto.</li>
 <li>Batteria auto: 64,8 kWh utili. La potenza alla batteria EV è stimata a partire dal dato di riferimento 8 A = 1,4 kW alla batteria. Per definizione, perdita fissa = 230×8/1000 − 1,4 = 0,44 kW. In questo modello si applica una penalizzazione corrente crescente, così che a 10 A si ottiene circa 78% di efficienza e il rendimento resta realistico nei range 6–16 A.</li>
-<li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW (ipotesi), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato).</li>
+<li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW (ipotesi), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato). La batteria si scarica solo se FV &lt; (casa + auto).</li>
 <li>Inverter: massimo 5 kW totali (FV + batteria).</li>
 <li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
 </ul>
@@ -106,7 +106,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 </section>
 
 <footer>
-<p>&copy; 2026 Marcello Gambardella. Impianto isolato, senza rete.</p>
+<p>© 2026 Marcello Gambardella. Impianto isolato, senza rete.</p>
 </footer>
 
 <script>
@@ -119,8 +119,7 @@ const REF_AMP=8, REF_BATTERY_KW=1.4;
 const FIXED_LOSS_KW=(230*REF_AMP/1000)-REF_BATTERY_KW;
 let online=null,manualCloud=false,deferredPrompt=null;
 
-function localDateString(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-$('date').value=localDateString();
+function localDateString(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}\n$('date').value=localDateString();
 function parseHour(v){const [h,m]=v.split(':').map(Number);return h+m/60;}
 function tzOff(date){const h=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:'Europe/Madrid'}).format(new Date(date+'T12:00:00Z')));return h-12;}
 
@@ -186,44 +185,73 @@ async function loadWeather(){
   calculate();
  }catch(e){online=null;$('weatherMsg').textContent='Meteo online non disponibile: uso la nuvolosità inserita a mano.';}
 }
+
 function sim(p,amps){
  const wallPower=230*amps/1000;
  const dcFull=evBatteryPowerAtCurrent(amps);
  const eff=evEfficiencyAtCurrent(amps);
- let socCar=p.car,socHome=p.home;const t={solar:0,ev:0,stored:0,batt:0,unmet:0,chH:0,exp:0,peak:0,maxLoad:0},rows=[];
+ let socCar=p.car,socHome=p.home;
+ const t={solar:0,toHouse:0,toAuto:0,stored:0,battToHouse:0,battToAuto:0,unmet:0,chgBatt:0,exp:0,peak:0,maxLoad:0},rows=[];
+ 
  for(let h=Math.floor(p.start);h<Math.ceil(p.end);h++){
-  const frac=Math.min(p.end,h+1)-Math.max(p.start,h);if(frac<=0)continue;
+  const frac=Math.min(p.end,h+1)-Math.max(p.start,h);
+  if(frac<=0)continue;
+  
   const solar=solarAt(p,h,Math.max(p.start,h)+frac/2);
-  const need=Math.max(0,CAR*(p.target-socCar)/100);
-  const availableFromHome = Math.max(0, socHome/100*HOME - p.reserve) * 0.95 / frac;
-  const availableToBattery = Math.min(p.dis, availableFromHome, Math.max(0,INV-solar));
-  let a=Math.min(amps,Math.floor(Math.max(0,solar+availableToBattery-p.base)*1000/230));if(a<6)a=0;
-  const acKw=230*a/1000;
-  const dcA=a>0?Math.max(0,evBatteryPowerAtCurrent(a)):0;
-  let carKw=0,dc=0;
-  if(need>0&&a>0){
-    if(dcA*frac<=need){
-      carKw=acKw;dc=dcA;
-    } else {
-      dc=need/frac;
-      carKw=dc / Math.max(0.6, eff/100);
-    }
+  const houseLoad=p.base;
+  const minReserveKwh=p.reserve*HOME/100;
+  const battAvailKwh=Math.max(0,socHome/100*HOME-minReserveKwh);
+  
+  let maxAutoAmps=amps;
+  if(solar+battAvailKwh/frac<houseLoad){
+    maxAutoAmps=Math.max(6,Math.floor((solar+battAvailKwh/frac-houseLoad)*1000/230));
   }
-  const total=carKw+p.base;
-  const solarUse=Math.min(solar,total),surplus=solar-solarUse,deficit=total-solarUse;
-  const battKw=Math.min(deficit,availableToBattery);
-  const gridKw=deficit-battKw;
-  const room=Math.max(0,HOME*(1-socHome/100));
-  const chgKw=Math.min(surplus,p.chg,room/(0.95*frac));
-  const expKw=surplus-chgKw;
-  socCar=clamp(socCar+dc*frac/CAR*100,0,100);
-  socHome=clamp(socHome-battKw*frac*0.95/HOME*100+chgKw*frac*0.95/HOME*100,p.reserve,100);
-  t.solar+=solar*frac;t.ev+=carKw*frac;t.stored+=dc*frac;t.batt+=battKw*frac;t.unmet+=gridKw*frac;t.chH+=carKw>0?frac:0;t.exp+=expKw*frac;
-  t.peak=Math.max(t.peak,solar);t.maxLoad=Math.max(t.maxLoad,total);
-  rows.push({h,solar,carKw,base:p.base,battKw,chgKw,expKw,a:carKw>0?a:0,socHome,atRes:socHome<=p.reserve+0.01});
+  
+  if(maxAutoAmps<6)maxAutoAmps=0;
+  
+  const autoWallPower=(maxAutoAmps>0)?230*maxAutoAmps/1000:0;
+  const autoBattPower=(maxAutoAmps>0)?evBatteryPowerAtCurrent(maxAutoAmps):0;
+  const totalLoad=houseLoad+autoWallPower;
+  
+  let fvToHouse=Math.min(solar,houseLoad);
+  let fvToAuto=Math.max(0,solar-fvToHouse);
+  let fvSurplus=Math.max(0,fvToAuto-autoWallPower);
+  let houseDef=Math.max(0,houseLoad-fvToHouse);
+  let autoDef=Math.max(0,autoWallPower-fvToAuto);
+  
+  let battToHouse=Math.min(houseDef,battAvailKwh/frac,p.dis);
+  houseDef=Math.max(0,houseDef-battToHouse);
+  
+  let battToAuto=Math.min(autoDef,Math.max(0,battAvailKwh/frac-battToHouse),p.dis-battToHouse);
+  autoDef=Math.max(0,autoDef-battToAuto);
+  
+  let fvToBatt=Math.min(Math.max(0,fvSurplus),p.chg);
+  fvSurplus=Math.max(0,fvSurplus-fvToBatt);
+  
+  const autoDC=(autoWallPower>0)?Math.min(autoBattPower,autoDef+fvToAuto/frac+battToAuto):0;
+  
+  socCar=clamp(socCar+autoDC*frac/CAR*100,0,100);
+  const dBatt=(-battToHouse-battToAuto+fvToBatt*0.95)/HOME*100;
+  socHome=clamp(socHome+dBatt,p.reserve,100);
+  
+  t.solar+=solar*frac;
+  t.toHouse+=fvToHouse*frac;
+  t.toAuto+=fvToAuto*frac;
+  t.stored+=autoDC*frac;
+  t.battToHouse+=battToHouse*frac;
+  t.battToAuto+=battToAuto*frac;
+  t.unmet+=houseDef*frac;
+  t.chgBatt+=fvToBatt*frac;
+  t.exp+=fvSurplus*frac;
+  t.peak=Math.max(t.peak,solar);
+  t.maxLoad=Math.max(t.maxLoad,totalLoad);
+  
+  rows.push({h,solar,houseLoad,autoWallPower,fvToHouse,fvToAuto,battToHouse,battToAuto,fvToBatt,a:maxAutoAmps,socHome,deficit:houseDef});
  }
+ 
  return{t,rows,socCar,socHome,evKw:wallPower,dcFull,eff,socketPower:wallPower};
 }
+
 function calculate(){
  const date=$('date').value,start=parseHour($('start').value),end=parseHour($('end').value);
  if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l\'ora finale deve essere dopo quella iniziale.';return;}
@@ -234,34 +262,45 @@ function calculate(){
  const amps=Number($('amps').value);
  const R=sim(p,amps),t=R.t;
  const finalCar=R.socCar;
+ 
  $('evPower').textContent=fmt(R.socketPower,2)+' kW ('+fmt(R.dcFull,2)+' alla batteria, '+fmt(R.eff,1)+'% eff.)';
- $('gridEnergy').textContent=fmt(t.ev,2)+' kWh';
+ $('gridEnergy').textContent=fmt(t.toAuto,2)+' kWh';
  $('stored').textContent=fmt(t.stored,2)+' kWh';
  $('finalCar').textContent=fmt(finalCar,1)+'%';$('carBar').style.width=finalCar+'%';
  $('finalHome').textContent=fmt(R.socHome,1)+'%';$('homeBar').style.width=R.socHome+'%';
  $('solarEnergy').textContent=fmt(t.solar,2)+' kWh';
- $('battOut').textContent=fmt(t.batt,2)+' kWh';
+ $('battOut').textContent=fmt(t.battToHouse+t.battToAuto,2)+' kWh';
  $('gridOut').textContent=fmt(t.unmet,2)+' kWh';
- $('rows').innerHTML=R.rows.map(r=>`<tr><td>${String(r.h).padStart(2,'0')}:00</td><td>${fmt(r.solar,2)}</td><td>${fmt(r.carKw,2)}</td><td>${fmt(r.base,2)}</td><td>${fmt(r.battKw,2)}</td><td>${fmt(r.chgKw,2)}</td><td>${fmt(r.expKw,2)}</td><td>${r.a||'—'}</td><td>${fmt(r.socHome,1)}%${r.atRes?' 🔋 riserva':''}</td></tr>`).join('')||'<tr><td colspan="9">Nessuna ora di ricarica nella finestra scelta.</td></tr>';
+ 
+ $('rows').innerHTML=R.rows.map(r=>`<tr><td>${String(r.h).padStart(2,'0')}:00</td><td>${fmt(r.solar,2)}</td><td>${fmt(r.houseLoad,2)}</td><td>${fmt(r.autoWallPower,2)}</td><td>${fmt(r.fvToHouse,2)}</td><td>${fmt(r.fvToAuto,2)}</td><td>${fmt(r.battToHouse,2)}</td><td>${fmt(r.battToAuto,2)}</td><td>${fmt(r.fvToBatt,2)}</td><td>${r.a||'—'}</td><td>${fmt(r.socHome,1)}%${r.deficit>0.01?' 🔥 deficit':''}</td></tr>`).join('')||'<tr><td colspan="11">Nessuna ora di ricarica nella finestra scelta.</td></tr>';
+ 
  const all=AMPS.map(a=>({a,r:sim(p,a)}));
  const ok=all.filter(x=>x.r.socCar>=p.target-0.1);
  const best=ok.length?ok.reduce((m,x)=>x.r.socHome>m.r.socHome+0.01?x:m):all.reduce((m,x)=>x.r.socCar>m.r.socCar?x:m);
- $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.batt,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
+ 
+ $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.battToAuto,2)}</td><td>${fmt(x.r.t.chgBatt/x.r.socketPower,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
+ 
  $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l'obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l'obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
+ 
  let st,cls;
- if(t.unmet>0.05){st='ATTENZIONE: in alcune ore FV e batteria non coprono nemmeno i consumi della casa.';cls='bad';}
+ if(t.unmet>0.05){st='ATTENZIONE: in alcune ore FV e batteria non coprono i consumi della casa (blackout).';cls='bad';}
  else if(t.maxLoad>INV){st='NON COMPATIBILE: carico superiore al limite di 5 kW.';cls='bad';}
  else if(finalCar<p.target-0.1){st=`RICARICA PARZIALE: FV e batteria nella finestra scelta non portano l'auto al ${p.target}%.`;cls='warn';}
- else if(R.socHome<=p.reserve+0.01&&t.batt>0.01){st='ATTENZIONE: la batteria di casa arriva alla riserva minima.';cls='warn';}
+ else if(R.socHome<p.reserve+1){st='ATTENZIONE: la batteria di casa arriva quasi alla riserva minima.';cls='warn';}
  else{st=`PIANO SUFFICIENTE: l'auto arriva al ${p.target}%.`;cls='good';}
- $('status').className='status '+cls;$('status').textContent=st;
- const rr=R.rows.find(r=>r.atRes),resMsg=rr?` La batteria di casa arriva alla riserva minima (${p.reserve}%) alle ${String(rr.h).padStart(2,'0')}:00: da quel momento non può più scaricare e l'auto si ricarica solo con il FV disponibile (colonna Corrente auto). Per usarla di più, abbassa la riserva minima.`:'';
- $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato: per la casa va usata prima la FV e poi la batteria domestica; l'auto riceve solo il residuo dopo i consumi. Rendimento stimato a ${amps} A: ${fmt(R.eff,1)}%. ${resMsg}`;
+ 
+ $('status').className='status '+cls;
+ $('status').textContent=st;
+ 
+ const rr=R.rows.find(r=>r.deficit>0.01),defMsg=rr?` BLACKOUT alle ${String(rr.h).padStart(2,'0')}:00: la batteria di casa è scarica e il FV non basta per la casa.`:' Nessun deficit.';
+ $('explain').textContent=`Bilancio energetico per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra. Priorità: casa → auto. FV complessivo distribuito: ${fmt(t.toHouse,2)} kWh a casa, ${fmt(t.toAuto,2)} kWh pre-auto. Batteria domestica: ${fmt(t.battToHouse+t.battToAuto,2)} kWh scaricata (limite scarica ${fmt(p.dis,1)} kW), ${fmt(t.chgBatt,2)} kWh ricaricata (limite carica ${fmt(p.chg,1)} kW). FV eccedente non usato: ${fmt(t.exp,2)} kWh.${defMsg}`;
 }
+
 $('calc').addEventListener('click',calculate);
 $('weather').addEventListener('click',loadWeather);
 $('cloud').addEventListener('input',()=>{manualCloud=true;if(online)$('weatherMsg').textContent='Nuvolosità modificata a mano: uso questo valore al posto della radiazione online. Premi "Aggiorna meteo online" per tornare ai dati previsti.';calculate();});
 ['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi "Aggiorna meteo online".';calculate();}));
+
 function registerServiceWorker(){
  if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
