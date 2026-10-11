@@ -1,4 +1,4 @@
-const CACHE_NAME = 'byd-solar-v3';
+const CACHE_NAME = 'byd-solar-v4';
 const APP_SHELL = [
   './',
   './index.html',
