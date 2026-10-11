@@ -103,6 +103,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <li>Batteria auto: 64,8 kWh utili. La potenza alla batteria EV è stimata a partire dal dato di riferimento 8 A = 1,4 kW alla batteria. Per definizione, perdita fissa = 230×8/1000 − 1,4 = 0,44 kW. In questo modello si applica una penalizzazione corrente crescente, così che a 10 A si ottiene circa 78% di efficienza e il rendimento resta realistico nei range 6–16 A.</li>
 <li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW senza sole e fino a 5 kW totali (FV + batteria) con il sole, nessun livello minimo di carica (riserva predefinita 0%, modificabile), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato). La batteria si scarica solo se FV &lt; (casa + auto).</li>
 <li>Inverter: massimo 5 kW totali (FV + batteria).</li>
+<li>Corrente di ricarica: è un limite massimo, che la wallbox può sempre ridurre. Per coerenza, il risultato a N A non è mai peggiore di quello con una corrente inferiore: se una corrente minore dà un piano migliore (obiettivo raggiunto con più carica residua in casa, oppure auto più carica), viene mostrato quel piano e indicata la corrente massima effettivamente usata.</li>
 <li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
 </ul>
 </details>
@@ -184,7 +185,7 @@ async function loadWeather(){
  }catch(e){online=null;$('weatherMsg').textContent='Meteo online non disponibile: uso la nuvolosità inserita a mano.';}
 }
 
-function sim(p,amps){
+function simRaw(p,amps){
  const wallPower=230*amps/1000,dcFull=evBatteryPowerAtCurrent(amps),eff=evEfficiencyAtCurrent(amps);
  let socCar=p.car,stored=p.home/100*HOME;
  const minKwh=p.reserve*HOME/100;
@@ -224,6 +225,27 @@ function sim(p,amps){
  return{t,rows,socCar,socHome:stored/HOME*100,evKw:wallPower,dcFull,eff,socketPower:wallPower};
 }
 
+// Confronto tra due piani: true se 'a' è migliore di 'b'.
+// Obiettivo raggiunto -> vince chi lascia più carica la batteria di casa; obiettivo non raggiunto -> vince chi carica di più l'auto.
+function betterPlan(a,b,target){
+ const ra=a.socCar>=target-0.1,rb=b.socCar>=target-0.1;
+ if(ra!==rb)return ra;
+ if(ra)return a.socHome>b.socHome+0.01;
+ if(Math.abs(a.socCar-b.socCar)>0.05)return a.socCar>b.socCar;
+ return a.socHome>b.socHome+0.01;
+}
+// La corrente scelta è un LIMITE MASSIMO della wallbox: la si può sempre ridurre.
+// Quindi il risultato a N A non può mai essere peggiore di quello ottenuto con una corrente minore:
+// si sceglie il miglior piano tra tutte le correnti <= N (evita che 8 A scarichi di più la batteria di casa E carichi di più l'auto rispetto a 10 A).
+function sim(p,amps){
+ p._c=p._c||{};
+ const raw=a=>p._c[a]||(p._c[a]=simRaw(p,a));
+ let best=null,bestA=null;
+ AMPS.filter(a=>a<=amps).forEach(a=>{const r=raw(a);if(!best||betterPlan(r,best,p.target)){best=r;bestA=a;}});
+ const nominal=raw(amps);
+ return Object.assign({},best,{socketPower:nominal.socketPower,evKw:nominal.evKw,dcFull:nominal.dcFull,eff:nominal.eff,usedAmps:bestA});
+}
+
 function calculate(){
  const date=$('date').value,start=parseHour($('start').value),end=parseHour($('end').value);
  if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l\'ora finale deve essere dopo quella iniziale.';return;}
@@ -250,7 +272,7 @@ function calculate(){
  const ok=all.filter(x=>x.r.socCar>=p.target-0.1);
  const best=ok.length?ok.reduce((m,x)=>x.r.socHome>m.r.socHome+0.01?x:m):all.reduce((m,x)=>x.r.socCar>m.r.socCar?x:m);
  
- $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.battToAuto,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
+ $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x.r.usedAmps<x.a?' <small>(usa max '+x.r.usedAmps+' A)</small>':''}${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.battToAuto,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
  
  $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l'obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l'obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
  
@@ -265,7 +287,7 @@ function calculate(){
  $('status').textContent=st;
  
  const rr=R.rows.find(r=>r.deficit>0.01),defMsg=rr?` BLACKOUT alle ${String(rr.h).padStart(2,'0')}:00: la batteria di casa è scarica e il FV non basta per la casa.`:' Nessun deficit.';
- $('explain').textContent=`Bilancio energetico per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra. Priorità: FV → casa → auto; la batteria copre solo ciò che il FV non copre, e il FV avanzato la ricarica. FV usato direttamente: ${fmt(t.toHouse,2)} kWh a casa, ${fmt(t.toAuto,2)} kWh all'auto. Batteria domestica: ${fmt(t.battToHouse+t.battToAuto,2)} kWh scaricata (limite scarica ${fmt(p.dis,1)} kW), ${fmt(t.chgBatt,2)} kWh ricaricata (limite carica ${fmt(p.chg,1)} kW). FV non usato: ${fmt(t.exp,2)} kWh.${defMsg} Verifica bilancio: ${R.t.resid<1e-6?'OK':'ERRORE ('+R.t.resid.toExponential(1)+' kW)'}.`;
+ $('explain').textContent=`Bilancio energetico per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra. Priorità: FV → casa → auto; la batteria copre solo ciò che il FV non copre, e il FV avanzato la ricarica. FV usato direttamente: ${fmt(t.toHouse,2)} kWh a casa, ${fmt(t.toAuto,2)} kWh all'auto. Batteria domestica: ${fmt(t.battToHouse+t.battToAuto,2)} kWh scaricata (limite scarica ${fmt(p.dis,1)} kW), ${fmt(t.chgBatt,2)} kWh ricaricata (limite carica ${fmt(p.chg,1)} kW). FV non usato: ${fmt(t.exp,2)} kWh.${defMsg} ${R.usedAmps<amps?` Nota: con ${amps} A impostati il piano migliore usa al massimo ${R.usedAmps} A (una corrente più alta non darebbe un risultato migliore).`:''} Verifica bilancio: ${R.t.resid<1e-6?'OK':'ERRORE ('+R.t.resid.toExponential(1)+' kW)'}.`;
 }
 
 $('calc').addEventListener('click',calculate);
