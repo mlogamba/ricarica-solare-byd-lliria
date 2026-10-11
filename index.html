@@ -25,6 +25,8 @@ small,.muted{color:#596979;font-size:.84rem}button{border:0;border-radius:11px;p
 table{border-collapse:collapse;width:100%;font-size:.87rem}th,td{text-align:right;padding:8px 6px;border-bottom:1px solid #e6ebef}th:first-child,td:first-child{text-align:left}th{color:#526272;font-weight:700}.tablewrap{overflow-x:auto}tr.sel td{background:#eef7f3;font-weight:700}
 .bar{height:10px;background:#e8edf0;border-radius:99px;overflow:hidden;margin-top:6px}.bar span{display:block;height:100%;background:#2c9977;width:0}
 details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b2a;padding:10px 12px;background:#fff9e9;border-radius:6px;font-size:.9rem}
+.alarm{background:#b3261e;color:#fff;font-weight:800;padding:14px 16px;border-radius:12px;position:sticky;top:8px;z-index:20;box-shadow:0 4px 14px #0006;margin:12px 0;line-height:1.35}.alarm[hidden]{display:none}
+.recbox .metric .v{font-size:1.2rem}
 footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:center;font-size:.85rem;color:#596979}
 @media(max-width:600px){body{padding:10px}.card{padding:13px}.metric .v{font-size:1.15rem}}
 </style>
@@ -34,6 +36,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <h1>☀️ Ricarica Solare BYD – Llíria</h1>
 <p>Pianificatore domestico per BYD ATTO 2 Comfort, fotovoltaico e batterie di casa</p>
 </header>
+<div id="alarm" class="alarm" role="alert" hidden></div>
 
 <section class="card">
 <h2>1. Dati da inserire</h2>
@@ -42,7 +45,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <div><label for="homeSoc">Batteria casa attuale (%)</label><input id="homeSoc" type="number" min="0" max="100" value="38" step="1"></div>
 <div><label for="target">Obiettivo batteria auto (%)</label><input id="target" type="number" min="1" max="100" value="100" step="1"></div>
 <div><label for="cloud">Nuvolosità prevista (%)</label><input id="cloud" type="number" min="0" max="100" value="20" step="5"><small>Con il meteo online viene compilata da sola.</small></div>
-<div><label for="amps">Corrente di ricarica (A)</label><select id="amps"><option>6</option><option>8</option><option selected>10</option><option>13</option><option>16</option></select></div>
+<div><label for="amps">Corrente di ricarica (A)</label><select id="amps"><option>6</option><option>8</option><option selected>10</option><option>13</option><option>16</option></select><small>La corrente resta fissa: l'app non la cambia mai da sola.</small></div>
 <div><label for="date">Data della simulazione</label><input id="date" type="date"></div>
 <div><label for="start">Ora inizio ricarica</label><input id="start" type="time" value="07:00"></div>
 <div><label for="end">Ora fine ricarica</label><input id="end" type="time" value="18:00"></div>
@@ -66,8 +69,15 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <p id="weatherMsg" class="muted">Il meteo online è facoltativo e richiede Internet. Senza, si usa la nuvolosità inserita a mano.</p>
 </section>
 
+<section class="card recbox">
+<h2>2. Metodo di ricarica consigliato</h2>
+<div id="rec" class="muted">Calcolo in corso…</div>
+<div class="actions"><button id="applyRec" hidden>Applica questo consiglio al piano</button></div>
+<p class="muted">Il consiglio cerca, su tutta la giornata solare, la combinazione migliore di corrente fissa e orario (ignora gli orari inseriti sopra). Priorità: obiettivo raggiunto, nessun blackout, batteria casa sempre sopra il 5%, poi massima carica residua della batteria di casa.</p>
+</section>
+
 <section class="card">
-<h2>2. Risultato della simulazione</h2>
+<h2>3. Risultato della simulazione</h2>
 <div class="results">
 <div class="metric"><div class="muted">Potenza richiesta dall'auto</div><div class="v" id="evPower">—</div></div>
 <div class="metric"><div class="muted">Energia assorbita dall'auto</div><div class="v" id="gridEnergy">—</div></div>
@@ -83,13 +93,13 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 </section>
 
 <section class="card">
-<h2>3. Confronto per corrente di ricarica</h2>
+<h2>4. Confronto per corrente di ricarica (corrente fissa)</h2>
 <div class="tablewrap"><table><thead><tr><th>Corrente</th><th>Dalla presa (kW)</th><th>Alla batteria auto (kW)</th><th>Rendimento</th><th>Auto finale</th><th>Da batteria casa (kWh)</th><th>Ore di ricarica</th><th>Casa finale</th></tr></thead><tbody id="cmp"></tbody></table></div>
 <p id="best" class="muted"></p>
 </section>
 
 <section class="card">
-<h2>4. Bilancio orario stimato</h2>
+<h2>5. Bilancio orario stimato</h2>
 <div class="tablewrap"><table><thead><tr><th>Ora</th><th>FV (kW)</th><th>Casa (kW)</th><th>Auto (kW)</th><th>FV → Casa</th><th>FV → Auto</th><th>Batt → Casa</th><th>Batt → Auto</th><th>FV → Batt</th><th>FV non usato</th><th>Corrente auto (A)</th><th>Casa (%)</th></tr></thead><tbody id="rows"></tbody></table></div>
 </section>
 
@@ -103,7 +113,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <li>Batteria auto: 64,8 kWh utili. La potenza alla batteria EV è stimata a partire dal dato di riferimento 8 A = 1,4 kW alla batteria. Per definizione, perdita fissa = 230×8/1000 − 1,4 = 0,44 kW. In questo modello si applica una penalizzazione corrente crescente, così che a 10 A si ottiene circa 78% di efficienza e il rendimento resta realistico nei range 6–16 A.</li>
 <li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW senza sole e fino a 5 kW totali (FV + batteria) con il sole, nessun livello minimo di carica (riserva predefinita 0%, modificabile), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato). La batteria si scarica solo se FV &lt; (casa + auto).</li>
 <li>Inverter: massimo 5 kW totali (FV + batteria).</li>
-<li>Corrente di ricarica: è un limite massimo, che la wallbox può sempre ridurre. Per coerenza, il risultato a N A non è mai peggiore di quello con una corrente inferiore: se una corrente minore dà un piano migliore (obiettivo raggiunto con più carica residua in casa, oppure auto più carica), viene mostrato quel piano e indicata la corrente massima effettivamente usata.</li>
+<li>Corrente fissa: l'auto carica sempre alla corrente scelta oppure non carica (se FV + batteria non bastano per quella potenza). L'app non riduce mai l'amperaggio da sola.</li>
+<li>Batteria di casa esaurita (a riserva minima dopo aver alimentato l'auto): la ricarica si ferma e non riparte più nella simulazione, anche se poi torna il sole; il FV ricarica la batteria di casa.</li>
+<li>Allarme: scatta quando la batteria di casa simulata scende al 5% (avviso a schermo, suono e vibrazione). L'app non è collegata all'inverter: l'allarme si basa solo sulla simulazione.</li>
+<li>Consiglio automatico: prova tutte le correnti (6–16 A) e tutti gli orari di inizio (ogni 30 min) fino al tramonto; la ricarica finisce quando l'auto raggiunge l'obiettivo.</li>
 <li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
 </ul>
 </details>
@@ -185,28 +198,41 @@ async function loadWeather(){
  }catch(e){online=null;$('weatherMsg').textContent='Meteo online non disponibile: uso la nuvolosità inserita a mano.';}
 }
 
-function simRaw(p,amps){
+const ALARM_SOC=5;
+function fmtTime(h){let m=Math.round(h*60);m=Math.max(0,Math.min(m,24*60-1));return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function sunsetHour(date){let h=12;while(h<24&&clearSky(date,h).kw>0.02)h+=0.25;return Math.min(24,Math.ceil(h));}
+
+function sim(p,amps){
  const wallPower=230*amps/1000,dcFull=evBatteryPowerAtCurrent(amps),eff=evEfficiencyAtCurrent(amps);
- let socCar=p.car,stored=p.home/100*HOME;
+ let socCar=p.car,stored=p.home/100*HOME,started=false,locked=false;
  const minKwh=p.reserve*HOME/100;
- const t={solar:0,toHouse:0,toAuto:0,carWall:0,stored:0,battToHouse:0,battToAuto:0,unmet:0,chgBatt:0,exp:0,peak:0,maxLoad:0,chH:0,resid:0},rows=[];
+ const t={solar:0,toHouse:0,toAuto:0,carWall:0,stored:0,battToHouse:0,battToAuto:0,unmet:0,chgBatt:0,exp:0,peak:0,maxLoad:0,chH:0,resid:0,minSoc:p.home,alarmTime:null,alarmAtStart:false,carStart:null,carEnd:null,lockAt:null},rows=[];
  for(let h=Math.floor(p.start);h<Math.ceil(p.end);h++){
-  const frac=Math.min(p.end,h+1)-Math.max(p.start,h);
+  const t0=Math.max(p.start,h),frac=Math.min(p.end,h+1)-t0;
   if(frac<=0)continue;
-  const solar=solarAt(p,h,Math.max(p.start,h)+frac/2);
+  const socStart=stored/HOME*100;
+  const solar=solarAt(p,h,t0+frac/2);
   const house=p.base;
-  // Fonti: FV, poi batteria (solo scarica, entro limite, riserva e inverter 5 kW totali)
-  const availB=Math.min(solar>0.05?INV:p.dis,Math.max(0,stored-minKwh)*0.95/frac,Math.max(0,INV-solar)); // senza sole max p.dis (2,5 kW); con il sole fino a 5 kW totali FV+batteria
+  // Batteria: solo scarica, entro limite di potenza, riserva minima e inverter 5 kW totali
+  const pwrLim=Math.min(solar>0.05?INV:p.dis,Math.max(0,INV-solar));
+  const energyLim=Math.max(0,stored-minKwh)*0.95/frac;
+  const availB=Math.min(pwrLim,energyLim);
   // 1) Casa: prima FV, poi batteria
   const fvH=Math.min(solar,house);
   const bH=Math.min(house-fvH,availB);
   const unmet=house-fvH-bH;
   let fvLeft=solar-fvH;const bLeft=availB-bH;
-  // 2) Auto: solo con l'energia che resta (FV + batteria), corrente intera >= 6 A, si ferma all'obiettivo
+  // 2) Auto: CORRENTE FISSA. Carica alla corrente scelta solo se FV + batteria coprono tutta la potenza, altrimenti non carica.
+  //    Se la batteria di casa si esaurisce dopo l'inizio della ricarica, la ricarica NON riparte più.
   const need=Math.max(0,CAR*(p.target-socCar)/100);
-  let a=Math.min(amps,Math.floor((fvLeft+bLeft)*1000/230));if(a<6||need<=0)a=0;
-  let wall=0,dc=0;
-  if(a>0){const w=230*a/1000,d=evBatteryPowerAtCurrent(a);if(d*frac<=need){wall=w;dc=d;}else{dc=need/frac;wall=w*dc/d;}}
+  let a=0,wall=0,dc=0,dur=0;
+  if(need>1e-9&&!locked){
+   if(fvLeft+bLeft>=wallPower-1e-9){
+    a=amps;
+    if(dcFull*frac<=need){wall=wallPower;dc=dcFull;}else{dc=need/frac;wall=wallPower*dc/dcFull;}
+    dur=dc*frac/dcFull;started=true;
+   }else if(started&&energyLim<pwrLim-1e-9){locked=true;if(t.lockAt==null)t.lockAt=t0;}
+  }
   const fvA=Math.min(fvLeft,wall),bA=Math.min(bLeft,Math.max(0,wall-fvA));
   fvLeft-=fvA;
   // 3) Il FV rimasto ricarica la batteria (limite carica, spazio libero, rendimento 95%); il resto è non usato
@@ -214,36 +240,80 @@ function simRaw(p,amps){
   const exp=fvLeft-fvB;
   stored+=(fvB*0.95-(bH+bA)/0.95)*frac;
   socCar=clamp(socCar+dc*frac/CAR*100,0,100);
-  const socHome=stored/HOME*100;
+  const socEnd=stored/HOME*100;
+  // batteria di casa esaurita durante la ricarica -> stop definitivo
+  if(started&&!locked&&(bH+bA)>1e-9&&stored<=minKwh+0.01*HOME){locked=true;if(t.lockAt==null)t.lockAt=t0+frac;}
+  // allarme al 5%
+  t.minSoc=Math.min(t.minSoc,socEnd);
+  if(t.alarmTime==null){
+   if(socStart<=ALARM_SOC){t.alarmTime=t0;t.alarmAtStart=rows.length===0;}
+   else if(socEnd<=ALARM_SOC)t.alarmTime=t0+frac*(socStart-ALARM_SOC)/(socStart-socEnd);
+  }
+  if(wall>0){if(t.carStart==null)t.carStart=t0;t.carEnd=t0+dur;}
   t.solar+=solar*frac;t.toHouse+=fvH*frac;t.toAuto+=fvA*frac;t.carWall+=(fvA+bA)*frac;t.stored+=dc*frac;
   t.battToHouse+=bH*frac;t.battToAuto+=bA*frac;t.unmet+=unmet*frac;t.chgBatt+=fvB*frac;t.exp+=exp*frac;
   t.chH+=wall>0?frac:0;t.peak=Math.max(t.peak,solar);t.maxLoad=Math.max(t.maxLoad,house+wall);
-  // verifica conservazione: FV prodotto = usato + non usato; carichi = fonti + non coperto
   t.resid=Math.max(t.resid,Math.abs(solar-(fvH+fvA+fvB+exp)),Math.abs(house+wall-(fvH+bH+unmet+fvA+bA)));
-  rows.push({h,solar,houseLoad:house,autoWallPower:wall,fvToHouse:fvH,fvToAuto:fvA,battToHouse:bH,battToAuto:bA,fvToBatt:fvB,exp,a:wall>0?a:0,socHome,deficit:unmet});
+  rows.push({h,solar,houseLoad:house,autoWallPower:wall,fvToHouse:fvH,fvToAuto:fvA,battToHouse:bH,battToAuto:bA,fvToBatt:fvB,exp,a:wall>0?a:0,socHome:socEnd,socStart,deficit:unmet,locked});
  }
- return{t,rows,socCar,socHome:stored/HOME*100,evKw:wallPower,dcFull,eff,socketPower:wallPower};
+ return{t,rows,socCar,socHome:stored/HOME*100,minSoc:t.minSoc,alarmTime:t.alarmTime,alarmAtStart:t.alarmAtStart,lockedAt:locked?t.lockAt:null,evKw:wallPower,dcFull,eff,socketPower:wallPower};
 }
 
-// Confronto tra due piani: true se 'a' è migliore di 'b'.
-// Obiettivo raggiunto -> vince chi lascia più carica la batteria di casa; obiettivo non raggiunto -> vince chi carica di più l'auto.
-function betterPlan(a,b,target){
- const ra=a.socCar>=target-0.1,rb=b.socCar>=target-0.1;
- if(ra!==rb)return ra;
- if(ra)return a.socHome>b.socHome+0.01;
- if(Math.abs(a.socCar-b.socCar)>0.05)return a.socCar>b.socCar;
- return a.socHome>b.socHome+0.01;
+// Qualità di un piano: 0 = obiettivo raggiunto senza allarmi né blackout; 1 = raggiunto ma batteria casa <=5%; 2 = raggiunto con blackout; 3 = obiettivo non raggiunto
+function tier(r,p){
+ if(r.socCar>=p.target-0.1)return r.t.unmet>0.05?2:(r.alarmTime!=null?1:0);
+ return 3;
 }
-// La corrente scelta è un LIMITE MASSIMO della wallbox: la si può sempre ridurre.
-// Quindi il risultato a N A non può mai essere peggiore di quello ottenuto con una corrente minore:
-// si sceglie il miglior piano tra tutte le correnti <= N (evita che 8 A scarichi di più la batteria di casa E carichi di più l'auto rispetto a 10 A).
-function sim(p,amps){
- p._c=p._c||{};
- const raw=a=>p._c[a]||(p._c[a]=simRaw(p,a));
- let best=null,bestA=null;
- AMPS.filter(a=>a<=amps).forEach(a=>{const r=raw(a);if(!best||betterPlan(r,best,p.target)){best=r;bestA=a;}});
- const nominal=raw(amps);
- return Object.assign({},best,{socketPower:nominal.socketPower,evKw:nominal.evKw,dcFull:nominal.dcFull,eff:nominal.eff,usedAmps:bestA});
+function better(a,b,p){
+ const ta=tier(a,p),tb=tier(b,p);
+ if(ta!==tb)return ta<tb;
+ if(ta===3){if(Math.abs(a.socCar-b.socCar)>0.05)return a.socCar>b.socCar;return a.socHome>b.socHome+0.01;}
+ if(Math.abs(a.socHome-b.socHome)>0.5)return a.socHome>b.socHome;
+ return a.t.carWall<b.t.carWall-0.01;
+}
+
+// Cerca la migliore combinazione (corrente fissa, ora di inizio) su tutta la giornata solare; la fine è l'istante in cui l'auto raggiunge l'obiettivo.
+function recommend(p){
+ if(p.car>=p.target)return{done:true};
+ const hz=sunsetHour(p.date);let best=null;
+ for(let s=0;s<hz;s+=0.5){for(const a of AMPS){
+  const r=sim(Object.assign({},p,{start:s,end:hz}),a);
+  if(r.t.carStart==null)continue;
+  if(!best||better(r,best.r,p))best={a,s,r};
+ }}
+ if(!best)return{none:true};
+ const end=Math.min(23.99,Math.max(best.s+1/12,Math.ceil(best.r.t.carEnd*12-1e-9)/12));
+ let endT=end,win=sim(Object.assign({},p,{start:best.s,end:endT}),best.a);
+ // se accorciare la finestra al minuto esatto peggiora l'esito (arrotondamenti dell'ultima ora), si usa l'ora piena successiva
+ if(tier(win,p)>tier(best.r,p)){endT=Math.min(23.99,Math.max(best.s+0.5,Math.ceil(best.r.t.carEnd-1e-9)));win=sim(Object.assign({},p,{start:best.s,end:endT}),best.a);}
+ return{a:best.a,start:best.s,end:endT,eval:best.r,win,hz};
+}
+let lastRec=null,lastAlarm=false;
+function renderRec(rec,p){
+ const box=$('rec'),btn=$('applyRec');lastRec=rec;btn.hidden=true;
+ if(rec.done){box.textContent='L\'auto è già al livello obiettivo: non serve ricaricare.';return;}
+ if(rec.none){box.textContent='Nessuna combinazione riesce a caricare l\'auto con questi parametri.';return;}
+ const w=rec.win,e=rec.eval,tr=tier(e,p);
+ const msg=[
+  ['good','Obiettivo raggiunto, nessun blackout e batteria di casa sempre sopra il '+ALARM_SOC+'%.'],
+  ['warn','Obiettivo raggiunto, ma la batteria di casa scende al '+ALARM_SOC+'% o meno: nessuna combinazione migliore.'],
+  ['bad','Obiettivo raggiunto ma con carichi di casa non coperti (blackout): nessuna combinazione migliore.'],
+  ['warn','Nessuna combinazione raggiunge l\'obiettivo del '+p.target+'%: questa è quella che arriva più in alto.']][tr];
+ box.innerHTML=`<div class="results">
+ <div class="metric"><div class="muted">Corrente fissa consigliata</div><div class="v">${rec.a} A</div><small>${fmt(230*rec.a/1000,2)} kW dalla presa</small></div>
+ <div class="metric"><div class="muted">Orario consigliato</div><div class="v">${fmtTime(rec.start)} → ${fmtTime(rec.end)}</div></div>
+ <div class="metric"><div class="muted">Batteria auto a fine ricarica</div><div class="v">${fmt(w.socCar,1)}%</div></div>
+ <div class="metric"><div class="muted">Batteria casa a fine ricarica</div><div class="v">${fmt(w.socHome,1)}%</div><small>${fmt(e.socHome,1)}% a fine giornata solare (${String(rec.hz).padStart(2,'0')}:00)</small></div>
+ <div class="metric"><div class="muted">Minimo batteria casa</div><div class="v">${fmt(e.minSoc,1)}%</div></div>
+ <div class="metric"><div class="muted">Prelevata dalla batteria casa</div><div class="v">${fmt(w.t.battToAuto,2)} kWh</div></div>
+ </div><div class="status ${msg[0]}">${msg[1]}</div>`;
+ btn.hidden=false;
+}
+function beep(){
+ try{const C=window.AudioContext||window.webkitAudioContext;const c=new C();
+  [0,0.35,0.7].forEach(d=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=0.25;o.connect(g);g.connect(c.destination);o.start(c.currentTime+d);o.stop(c.currentTime+d+0.2);});
+  if(navigator.vibrate)navigator.vibrate([300,150,300,150,300]);
+ }catch(e){}
 }
 
 function calculate(){
@@ -256,7 +326,7 @@ function calculate(){
  const amps=Number($('amps').value);
  const R=sim(p,amps),t=R.t;
  const finalCar=R.socCar;
- 
+
  $('evPower').textContent=fmt(R.socketPower,2)+' kW ('+fmt(R.dcFull,2)+' alla batteria, '+fmt(R.eff,1)+'% eff.)';
  $('gridEnergy').textContent=fmt(t.carWall,2)+' kWh';
  $('stored').textContent=fmt(t.stored,2)+' kWh';
@@ -265,32 +335,48 @@ function calculate(){
  $('solarEnergy').textContent=fmt(t.solar,2)+' kWh';
  $('battOut').textContent=fmt(t.battToHouse+t.battToAuto,2)+' kWh';
  $('gridOut').textContent=fmt(t.unmet,2)+' kWh';
- 
- $('rows').innerHTML=R.rows.map(r=>`<tr><td>${String(r.h).padStart(2,'0')}:00</td><td>${fmt(r.solar,2)}</td><td>${fmt(r.houseLoad,2)}</td><td>${fmt(r.autoWallPower,2)}</td><td>${fmt(r.fvToHouse,2)}</td><td>${fmt(r.fvToAuto,2)}</td><td>${fmt(r.battToHouse,2)}</td><td>${fmt(r.battToAuto,2)}</td><td>${fmt(r.fvToBatt,2)}</td><td>${fmt(r.exp,2)}</td><td>${r.a||'—'}</td><td>${fmt(r.socHome,1)}%${r.deficit>0.01?' 🔥 deficit':''}</td></tr>`).join('')||'<tr><td colspan="12">Nessuna ora di ricarica nella finestra scelta.</td></tr>';
- 
+
+ $('rows').innerHTML=R.rows.map(r=>`<tr><td>${String(r.h).padStart(2,'0')}:00</td><td>${fmt(r.solar,2)}</td><td>${fmt(r.houseLoad,2)}</td><td>${fmt(r.autoWallPower,2)}</td><td>${fmt(r.fvToHouse,2)}</td><td>${fmt(r.fvToAuto,2)}</td><td>${fmt(r.battToHouse,2)}</td><td>${fmt(r.battToAuto,2)}</td><td>${fmt(r.fvToBatt,2)}</td><td>${fmt(r.exp,2)}</td><td>${r.a||(r.locked?'🔒 sospesa':'—')}</td><td>${fmt(r.socHome,1)}%${r.socHome<=ALARM_SOC?' ⚠️ ≤'+ALARM_SOC+'%':''}${r.deficit>0.01?' 🔥 deficit':''}</td></tr>`).join('')||'<tr><td colspan="12">Nessuna ora di ricarica nella finestra scelta.</td></tr>';
+
  const all=AMPS.map(a=>({a,r:sim(p,a)}));
- const ok=all.filter(x=>x.r.socCar>=p.target-0.1);
- const best=ok.length?ok.reduce((m,x)=>x.r.socHome>m.r.socHome+0.01?x:m):all.reduce((m,x)=>x.r.socCar>m.r.socCar?x:m);
- 
- $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x.r.usedAmps<x.a?' <small>(usa max '+x.r.usedAmps+' A)</small>':''}${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.battToAuto,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
- 
- $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l'obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l'obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
- 
+ const best=all.reduce((m,x)=>better(x.r,m.r,p)?x:m);
+ const bestOk=best.r.socCar>=p.target-0.1;
+
+ $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.socketPower,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.eff)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.battToAuto,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%${x.r.alarmTime!=null?' ⚠️':''}</td></tr>`).join('');
+
+ $('best').textContent=bestOk?`⭐ Con la finestra scelta (${$('start').value}–${$('end').value}) la corrente migliore è ${best.a} A: raggiunge l'obiettivo${tier(best.r,p)===0?' lasciando più carica la batteria di casa':' (ma con avvisi, vedi sopra)'}. Per scegliere anche gli orari vedi il consiglio automatico.`:`⭐ Nessuna corrente raggiunge l'obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
+
  let st,cls;
  if(t.unmet>0.05){st='ATTENZIONE: in alcune ore FV e batteria non coprono i consumi della casa (blackout).';cls='bad';}
  else if(t.maxLoad>INV){st='NON COMPATIBILE: carico superiore al limite di 5 kW.';cls='bad';}
+ else if(R.lockedAt!=null&&finalCar<p.target-0.1){st=`RICARICA INTERROTTA: la batteria di casa si esaurisce alle ${fmtTime(R.lockedAt)} e la ricarica non riparte più. Auto ferma al ${fmt(finalCar,1)}%.`;cls='bad';}
  else if(finalCar<p.target-0.1){st=`RICARICA PARZIALE: FV e batteria nella finestra scelta non portano l'auto al ${p.target}%.`;cls='warn';}
  else if(R.socHome<p.reserve+1&&t.battToHouse+t.battToAuto>0.01){st='ATTENZIONE: la batteria di casa arriva quasi alla riserva minima.';cls='warn';}
  else{st=`PIANO SUFFICIENTE: l'auto arriva al ${p.target}%.`;cls='good';}
- 
  $('status').className='status '+cls;
  $('status').textContent=st;
- 
+
+ // Allarme batteria casa al 5%
+ const al=$('alarm'),hasAl=R.alarmTime!=null;
+ if(hasAl){
+  al.hidden=false;
+  al.textContent=`🚨 ALLARME BATTERIA CASA: ${R.alarmAtStart?`è già al ${ALARM_SOC}% o meno all'inizio del piano`:`scende al ${ALARM_SOC}% alle ${fmtTime(R.alarmTime)}`} (minimo previsto ${fmt(R.minSoc,1)}%). Riduci l'amperaggio, sposta la ricarica nelle ore di sole o applica il consiglio automatico.`;
+  if(!lastAlarm)beep();
+ }else al.hidden=true;
+ lastAlarm=hasAl;
+
  const rr=R.rows.find(r=>r.deficit>0.01),defMsg=rr?` BLACKOUT alle ${String(rr.h).padStart(2,'0')}:00: la batteria di casa è scarica e il FV non basta per la casa.`:' Nessun deficit.';
- $('explain').textContent=`Bilancio energetico per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra. Priorità: FV → casa → auto; la batteria copre solo ciò che il FV non copre, e il FV avanzato la ricarica. FV usato direttamente: ${fmt(t.toHouse,2)} kWh a casa, ${fmt(t.toAuto,2)} kWh all'auto. Batteria domestica: ${fmt(t.battToHouse+t.battToAuto,2)} kWh scaricata (limite scarica ${fmt(p.dis,1)} kW), ${fmt(t.chgBatt,2)} kWh ricaricata (limite carica ${fmt(p.chg,1)} kW). FV non usato: ${fmt(t.exp,2)} kWh.${defMsg} ${R.usedAmps<amps?` Nota: con ${amps} A impostati il piano migliore usa al massimo ${R.usedAmps} A (una corrente più alta non darebbe un risultato migliore).`:''} Verifica bilancio: ${R.t.resid<1e-6?'OK':'ERRORE ('+R.t.resid.toExponential(1)+' kW)'}.`;
+ $('explain').textContent=`Bilancio energetico per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra. Corrente di ricarica fissa a ${amps} A. Priorità: FV → casa → auto; la batteria copre solo ciò che il FV non copre, e il FV avanzato la ricarica. FV usato direttamente: ${fmt(t.toHouse,2)} kWh a casa, ${fmt(t.toAuto,2)} kWh all'auto. Batteria domestica: ${fmt(t.battToHouse+t.battToAuto,2)} kWh scaricata (limite scarica ${fmt(p.dis,1)} kW), ${fmt(t.chgBatt,2)} kWh ricaricata (limite carica ${fmt(p.chg,1)} kW). FV non usato: ${fmt(t.exp,2)} kWh.${defMsg} Verifica bilancio: ${R.t.resid<1e-6?'OK':'ERRORE ('+R.t.resid.toExponential(1)+' kW)'}.`;
+
+ renderRec(recommend(p),p);
 }
 
-$('calc').addEventListener('click',calculate);
+$('calc').addEventListener('click',()=>{lastAlarm=false;calculate();});
+$('applyRec').addEventListener('click',()=>{
+ if(!lastRec||!lastRec.a)return;
+ $('amps').value=String(lastRec.a);$('start').value=fmtTime(lastRec.start);$('end').value=fmtTime(lastRec.end);
+ calculate();
+});
 $('weather').addEventListener('click',loadWeather);
 $('cloud').addEventListener('input',calculate);
 ['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','chg','dis','pvPeak','pvScale','useOnline'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi "Aggiorna meteo online".';calculate();}));
