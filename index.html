@@ -25,6 +25,7 @@ small,.muted{color:#596979;font-size:.84rem}button{border:0;border-radius:11px;p
 table{border-collapse:collapse;width:100%;font-size:.87rem}th,td{text-align:right;padding:8px 6px;border-bottom:1px solid #e6ebef}th:first-child,td:first-child{text-align:left}th{color:#526272;font-weight:700}.tablewrap{overflow-x:auto}tr.sel td{background:#eef7f3;font-weight:700}
 .bar{height:10px;background:#e8edf0;border-radius:99px;overflow:hidden;margin-top:6px}.bar span{display:block;height:100%;background:#2c9977;width:0}
 details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b2a;padding:10px 12px;background:#fff9e9;border-radius:6px;font-size:.9rem}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:center;font-size:.85rem;color:#596979}
 @media(max-width:600px){body{padding:10px}.card{padding:13px}.metric .v{font-size:1.15rem}}
 </style>
 </head>
@@ -47,8 +48,6 @@ details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b
 <div><label for="end">Ora fine ricarica</label><input id="end" type="time" value="18:00"></div>
 <div><label for="base">Consumo base casa (kW)</label><input id="base" type="number" min="0" max="5" value="0.2" step="0.05"></div>
 <div><label for="reserve">Riserva minima batteria casa (%)</label><input id="reserve" type="number" min="0" max="90" value="15" step="1"></div>
-<div><label for="eff">Rendimento massimo caricatore auto (%)</label><input id="eff" type="number" min="70" max="100" value="92" step="1"><small>A piena potenza. A bassa corrente il rendimento reale scende.</small></div>
-<div><label for="meas">Potenza alla batteria auto misurata a 8 A (kW)</label><input id="meas" type="number" min="0.5" max="1.84" value="1.4" step="0.05"><small>Calcolata automaticamente al variare della corrente: usa il valore misurato al 8 A.</small></div>
 </div>
 <h2 style="margin-top:18px">Parametri impianto</h2>
 <div class="grid">
@@ -77,7 +76,7 @@ details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b
 <div class="metric"><div class="muted">Prelevata dalla batteria casa</div><div class="v" id="battOut">—</div></div>
 <div class="metric"><div class="muted">Carico casa non coperto</div><div class="v" id="gridOut">—</div></div>
 </div>
-<div id="status" class="status warn">Premi “Calcola piano” per ottenere una stima.</div>
+<div id="status" class="status warn">Premi "Calcola piano" per ottenere una stima.</div>
 <p id="explain" class="muted"></p>
 </section>
 
@@ -99,14 +98,17 @@ details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b
 <li>Fotovoltaico: 10 × 450 W = 4,5 kWp; picco massimo osservato 3,5 kW (usato come tetto).</li>
 <li>Curva solare: posizione del sole calcolata per Llíria, con ora legale. Pannelli ipotizzati inclinati di 30° a sud (da correggere nel codice se diversi: TILT, PAZ). La curva è scalata sul valore osservato alle 10:00 a metà ottobre.</li>
 <li>Con il meteo online la radiazione prevista viene confrontata con quella di cielo sereno. Se modifichi la nuvolosità a mano, il valore inserito sostituisce la radiazione online (fino al prossimo aggiornamento meteo). La nuvolosità riduce la produzione fino a circa il 25% con cielo coperto al 100%.</li>
-<li>Batteria auto: 64,8 kWh utili (verificare sulla versione effettiva). Monofase: potenza auto = 230 V × ampere / 1000. Perdite di ricarica auto: potenza alla batteria = rendimento massimo × potenza dalla presa − perdita fissa. La perdita fissa è ricavata dalla potenza misurata a 8 A, quindi il rendimento cala a correnti basse (caricatore, raffreddamento, elettronica).</li>
+<li>Batteria auto: 64,8 kWh utili (verificare sulla versione effettiva). Monofase: potenza auto = 230 V × ampere / 1000. Perdite di ricarica auto: potenza alla batteria = (230 V × A / 1000) × ηeff(A) dove η è il rendimento effettivo in funzione della corrente, ricavato dalla misurazione a 8 A e interpolato linearmente per altre correnti.</li>
 <li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW (ipotesi), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato).</li>
 <li>Impianto isolato: nessuna rete. La casa ha la priorità; l'auto riceve solo ciò che resta tra FV e batteria (entro la riserva), con corrente ridotta fino a un minimo di 6 A, altrimenti la ricarica si sospende.</li><li>Inverter: massimo 5 kW totali (FV + batteria).</li>
 <li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
 </ul>
 </details>
-<p class="note"><b>Nota di sicurezza:</b> è uno strumento di pianificazione, non un sistema di controllo dell'inverter o del caricatore. Non cambia l'amperaggio del V2C Trydan. Se l'inverter o il circuito hanno limiti inferiori, prevalgono quelli.</p>
 </section>
+
+<footer>
+<p>&copy; 2026 Marcello Gambardella. Impianto isolato, senza rete.</p>
+</footer>
 
 <script>
 const $=id=>document.getElementById(id);
@@ -114,18 +116,25 @@ const fmt=(n,d=1)=>Number(n).toLocaleString('it-IT',{minimumFractionDigits:d,max
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const rad=Math.PI/180;
 const lat=39.68,lon=-0.63,KWP=4.5,PR=0.82,TILT=30,PAZ=0,PEAK=3.5,CAR=64.8,HOME=18,INV=5,AMPS=[6,8,10,13,16];
+const REF_AMP=8,REF_MEASURED_KW=1.4;
 let online=null,manualCloud=false,deferredPrompt=null;
 function localDateString(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 $('date').value=localDateString();
 function parseHour(v){const [h,m]=v.split(':').map(Number);return h+m/60;}
 function tzOff(date){const h=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:'Europe/Madrid'}).format(new Date(date+'T12:00:00Z')));return h-12;}
-function getCurrentLossInfo(amps, effPct, measured8Kw){
- const socketPower = 230 * amps / 1000;
- const maxBatteryPower = (effPct / 100) * socketPower;
- const fixedLossKw = Math.max(0, ((effPct / 100) * 230 * 8 / 1000) - (Number(measured8Kw) || 1.4));
- const powerToBattery = Math.max(0, maxBatteryPower - fixedLossKw);
- const efficiency = socketPower > 0 ? (powerToBattery / socketPower) * 100 : 0;
- return { socketPower, maxBatteryPower, fixedLossKw, powerToBattery, efficiency };
+function getEfficiencyForCurrent(amps){
+ const refPower=230*REF_AMP/1000;
+ const refEff=(REF_MEASURED_KW/refPower)*100;
+ const slope=(100-refEff)/(16-REF_AMP);
+ const eff=Math.max(50,refEff+slope*(amps-REF_AMP));
+ return eff;
+}
+function getCurrentLossInfo(amps){
+ const socketPower=230*amps/1000;
+ const effPct=getEfficiencyForCurrent(amps);
+ const powerToBattery=(effPct/100)*socketPower;
+ const fixedLoss=Math.max(0,socketPower-powerToBattery);
+ return{socketPower,powerToBattery,fixedLoss,effPct};
 }
 function clearSky(date,h){
  const [y,m,d]=date.split('-').map(Number);
@@ -164,9 +173,7 @@ async function loadWeather(){
  }catch(e){online=null;$('weatherMsg').textContent='Meteo online non disponibile: uso la nuvolosità inserita a mano.';}
 }
 function sim(p,amps){
- const measured8Kw=Number($('meas').value)||1.4;
- const lossInfo=getCurrentLossInfo(amps,p.eta*100,measured8Kw);
- const evKw=lossInfo.powerToBattery; // power at battery for current selection
+ const lossInfo=getCurrentLossInfo(amps);
  const dcFull=lossInfo.powerToBattery;
  let socCar=p.car,socHome=p.home;const t={solar:0,ev:0,stored:0,batt:0,unmet:0,chH:0,exp:0,peak:0,maxLoad:0},rows=[];
  for(let h=Math.floor(p.start);h<Math.ceil(p.end);h++){
@@ -175,9 +182,9 @@ function sim(p,amps){
   const need=Math.max(0,CAR*(p.target-socCar)/100);
   const availB=Math.min(p.dis,Math.max(0,socHome/100*HOME-p.reserve)*0.95/frac,Math.max(0,INV-solar));
   let a=Math.min(amps,Math.floor(Math.max(0,solar+availB-p.base)*1000/230));if(a<6)a=0;
-  const acKw=230*a/1000;const dcA=Math.max(0,p.eta*acKw-lossInfo.fixedLossKw);
+  const acKw=230*a/1000;const dcA=a>0?Math.max(0,(acKw*getEfficiencyForCurrent(a))/100):0;
   let carKw=0,dc=0;
-  if(need>0&&a>0){if(dcA*frac<=need){carKw=acKw;dc=dcA;}else{dc=need/frac;carKw=(dc+lossInfo.fixedLossKw)/p.eta;}}
+  if(need>0&&a>0){if(dcA*frac<=need){carKw=acKw;dc=dcA;}else{dc=need/frac;carKw=dc/(getEfficiencyForCurrent(a)/100);}}
   const total=carKw+p.base;
   const solarUse=Math.min(solar,total),surplus=solar-solarUse,deficit=total-solarUse;
   const battKw=Math.min(deficit,availB);
@@ -191,23 +198,21 @@ function sim(p,amps){
   t.peak=Math.max(t.peak,solar);t.maxLoad=Math.max(t.maxLoad,total);
   rows.push({h,solar,carKw,base:p.base,battKw,chgKw,expKw,a:carKw>0?a:0,socHome,atRes:socHome<=p.reserve+0.01});
  }
- return{t,rows,socCar,socHome,evKw,dcFull,lossInfo};
+ return{t,rows,socCar,socHome,evKw:dcFull,dcFull,lossInfo};
 }
 function calculate(){
  const date=$('date').value,start=parseHour($('start').value),end=parseHour($('end').value);
- if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l’ora finale deve essere dopo quella iniziale.';return;}
+ if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l\'ora finale deve essere dopo quella iniziale.';return;}
  const obs=clamp(Number($('obs').value)||1.8,0.1,5);
  const p={date,start,end,car:clamp(Number($('carSoc').value)||0,0,100),home:clamp(Number($('homeSoc').value)||0,0,100),
   target:clamp(Number($('target').value)||100,1,100),cloud:clamp(Number($('cloud').value)||0,0,100),
   base:Math.max(0,Number($('base').value)||0),reserve:clamp(Number($('reserve').value)||0,0,90),
-  eta:clamp(Number($('eff').value)||92,70,100)/100,chg:Math.max(0.1,Number($('chg').value)||2),dis:Math.max(0.1,Number($('dis').value)||2.5),k:calib(date,obs)};
- const measured8Kw=Number($('meas').value)||1.4;
+  chg:Math.max(0.1,Number($('chg').value)||2),dis:Math.max(0.1,Number($('dis').value)||2.5),k:calib(date,obs)};
  const amps=Number($('amps').value);
- const lossInfo=getCurrentLossInfo(amps,p.eta*100,measured8Kw);
- p.pf=lossInfo.fixedLossKw;
+ const lossInfo=getCurrentLossInfo(amps);
  const R=sim(p,amps),t=R.t;
  const finalCar=R.socCar;
- $('evPower').textContent=fmt(R.evKw,2)+' kW ('+fmt(R.dcFull,2)+' alla batteria, '+fmt(lossInfo.efficiency,1)+'% eff.)';
+ $('evPower').textContent=fmt(lossInfo.socketPower,2)+' kW ('+fmt(R.dcFull,2)+' alla batteria, '+fmt(lossInfo.effPct,1)+'% eff.)';
  $('gridEnergy').textContent=fmt(t.ev,2)+' kWh';
  $('stored').textContent=fmt(t.stored,2)+' kWh';
  $('finalCar').textContent=fmt(finalCar,1)+'%';$('carBar').style.width=finalCar+'%';
@@ -219,31 +224,23 @@ function calculate(){
  const all=AMPS.map(a=>({a,r:sim(p,a)}));
  const ok=all.filter(x=>x.r.socCar>=p.target-0.1);
  const best=ok.length?ok.reduce((m,x)=>x.r.socHome>m.r.socHome+0.01?x:m):all.reduce((m,x)=>x.r.socCar>m.r.socCar?x:m);
- $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.evKw,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.dcFull/x.r.evKw*100)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.batt,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
- $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l’obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l’obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
+ $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.evKw,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.lossInfo.effPct)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.batt,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
+ $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l'obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l'obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
  let st,cls;
  if(t.unmet>0.05){st='ATTENZIONE: in alcune ore FV e batteria non coprono nemmeno i consumi della casa.';cls='bad';}
  else if(t.maxLoad>INV){st='NON COMPATIBILE: carico superiore al limite di 5 kW.';cls='bad';}
- else if(finalCar<p.target-0.1){st=`RICARICA PARZIALE: FV e batteria nella finestra scelta non portano l’auto al ${p.target}%.`;cls='warn';}
+ else if(finalCar<p.target-0.1){st=`RICARICA PARZIALE: FV e batteria nella finestra scelta non portano l'auto al ${p.target}%.`;cls='warn';}
  else if(R.socHome<=p.reserve+0.01&&t.batt>0.01){st='ATTENZIONE: la batteria di casa arriva alla riserva minima.';cls='warn';}
- else{st=`PIANO SUFFICIENTE: l’auto arriva al ${p.target}%.`;cls='good';}
+ else{st=`PIANO SUFFICIENTE: l'auto arriva al ${p.target}%.`;cls='good';}
  $('status').className='status '+cls;$('status').textContent=st;
- const rr=R.rows.find(r=>r.atRes),resMsg=rr?` La batteria di casa arriva alla riserva minima (${p.reserve}%) alle ${String(rr.h).padStart(2,'0')}:00: da quel momento non può più scaricare e l’auto si ricarica solo con il FV disponibile (colonna Corrente auto). Per usarla di più, abbassa la riserva minima.`:'';
+ const rr=R.rows.find(r=>r.atRes),resMsg=rr?` La batteria di casa arriva alla riserva minima (${p.reserve}%) alle ${String(rr.h).padStart(2,'0')}:00: da quel momento non può più scaricare e l'auto si ricarica solo con il FV disponibile (colonna Corrente auto). Per usarla di più, abbassa la riserva minima.`:'';
  const c10=Math.min(PEAK,clearSky(date,10).kw*p.k);
- $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW; a cielo sereno alle 10:00 il modello dà ${fmt(c10,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato, senza rete: quando il FV è sotto la potenza dell’auto, la differenza arriva dalla batteria di casa (fino a ${fmt(p.dis,1)} kW). Se non basta, la corrente dell’auto viene ridotta (minimo 6 A) o la ricarica si sospende. Dato di calibrazione installato a Llíria (Valencia): perdita fissa stimata ${fmt(lossInfo.fixedLossKw,3)} kW a ${amps} A. ${resMsg}`;
+ $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW; a cielo sereno alle 10:00 il modello dà ${fmt(c10,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato a isola (senza rete): quando il FV è sotto la potenza dell'auto, la differenza arriva dalla batteria di casa (fino a ${fmt(p.dis,1)} kW). Se non basta, la corrente dell'auto viene ridotta (minimo 6 A) o la ricarica si sospende. Rendimento stimato a ${amps} A: ${fmt(lossInfo.effPct,1)}%. ${resMsg}`;
 }
 $('calc').addEventListener('click',calculate);
 $('weather').addEventListener('click',loadWeather);
-$('cloud').addEventListener('input',()=>{manualCloud=true;if(online)$('weatherMsg').textContent='Nuvolosità modificata a mano: uso questo valore al posto della radiazione online. Premi “Aggiorna meteo online” per tornare ai dati previsti.';calculate();});
-['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','eff','meas','obs','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi “Aggiorna meteo online”.';calculate();}));
-$('amps').addEventListener('change',()=>{
- const amps=Number($('amps').value);
- const eff=Number($('eff').value)||92;
- const measured8Kw=Number($('meas').value)||1.4;
- const info=getCurrentLossInfo(amps,eff,measured8Kw);
- $('meas').title=`Potenza stimata a ${amps} A: ${fmt(info.powerToBattery,2)} kW; perdita fissa ≈ ${fmt(info.fixedLossKw,3)} kW.`;
- calculate();
-});
+$('cloud').addEventListener('input',()=>{manualCloud=true;if(online)$('weatherMsg').textContent='Nuvolosità modificata a mano: uso questo valore al posto della radiazione online. Premi "Aggiorna meteo online" per tornare ai dati previsti.';calculate();});
+['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','obs','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi "Aggiorna meteo online".';calculate();}));
 function registerServiceWorker(){
  if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
