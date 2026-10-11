@@ -51,7 +51,6 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 </div>
 <h2 style="margin-top:18px">Parametri impianto</h2>
 <div class="grid">
-<div><label for="obs">FV osservato alle 10:00 (kW)</label><input id="obs" type="number" min="0.1" max="5" value="1.8" step="0.1"><small>Valore tipico di metà ottobre a Llíria: calibra la curva solare.</small></div>
 <div><label for="chg">Limite carica batteria casa (kW)</label><input id="chg" type="number" min="0.5" max="10" value="2" step="0.1"></div>
 <div><label for="dis">Limite scarica batteria casa (kW)</label><input id="dis" type="number" min="0.5" max="10" value="2.5" step="0.1"><small>Da confermare sull'inverter.</small></div>
 <div><label for="loc">Posizione fotovoltaica</label><input id="loc" type="text" value="Llíria, Valencia" readonly></div>
@@ -96,9 +95,9 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid #e6ebef;text-align:
 <summary>Parametri tecnici e limiti del modello</summary>
 <ul>
 <li>Fotovoltaico: 10 × 450 W = 4,5 kWp; picco massimo osservato 3,5 kW (usato come tetto).</li>
-<li>Curva solare: posizione del sole calcolata per Llíria, con ora legale. Pannelli ipotizzati inclinati di 30° a sud (da correggere nel codice se diversi: TILT, PAZ). La curva è scalata sul valore osservato alle 10:00 a metà ottobre.</li>
+<li>Curva solare: calcolata automaticamente per Llíria con dati online (Open-Meteo) e scalata in modo coerente con la localizzazione. La stima è aggiornata dalla previsione disponibile, senza campi manuali.</li>
 <li>Con il meteo online la radiazione prevista viene confrontata con quella di cielo sereno. Se modifichi la nuvolosità a mano, il valore inserito sostituisce la radiazione online (fino al prossimo aggiornamento meteo). La nuvolosità riduce la produzione fino a circa il 25% con cielo coperto al 100%.</li>
-<li>Batteria auto: 64,8 kWh utili (verificare sulla versione effettiva). Monofase: potenza auto = 230 V × ampere / 1000. Perdite di ricarica auto: potenza alla batteria = (230 V × A / 1000) × ηeff(A) dove η è il rendimento effettivo in funzione della corrente, ricavato dalla misurazione a 8 A e interpolato linearmente per altre correnti.</li>
+<li>Batteria auto: 64,8 kWh utili (verificare sulla versione effettiva). Monofase: potenza auto = 230 V × ampere / 1000. Perdite di ricarica auto: potenza alla batteria = (230 V × A / 1000) × ηeff(A) dove ηeff è il rendimento in funzione della corrente, calcolato dal punto di riferimento a 8 A e interpolato per le altre correnti.</li>
 <li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW (ipotesi), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato).</li>
 <li>Impianto isolato: nessuna rete. La casa ha la priorità; l'auto riceve solo ciò che resta tra FV e batteria (entro la riserva), con corrente ridotta fino a un minimo di 6 A, altrimenti la ricarica si sospende.</li><li>Inverter: massimo 5 kW totali (FV + batteria).</li>
 <li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
@@ -116,7 +115,7 @@ const fmt=(n,d=1)=>Number(n).toLocaleString('it-IT',{minimumFractionDigits:d,max
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const rad=Math.PI/180;
 const lat=39.68,lon=-0.63,KWP=4.5,PR=0.82,TILT=30,PAZ=0,PEAK=3.5,CAR=64.8,HOME=18,INV=5,AMPS=[6,8,10,13,16];
-const REF_AMP=8,REF_MEASURED_KW=1.4;
+const REF_AMP=8,REF_MEASURED_KW=1.4,MAX_EFF=92;
 let online=null,manualCloud=false,deferredPrompt=null;
 function localDateString(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 $('date').value=localDateString();
@@ -125,8 +124,8 @@ function tzOff(date){const h=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-dig
 function getEfficiencyForCurrent(amps){
  const refPower=230*REF_AMP/1000;
  const refEff=(REF_MEASURED_KW/refPower)*100;
- const slope=(100-refEff)/(16-REF_AMP);
- const eff=Math.max(50,refEff+slope*(amps-REF_AMP));
+ const slope=(MAX_EFF-refEff)/(16-REF_AMP);
+ const eff=clamp(refEff+slope*(amps-REF_AMP),65,MAX_EFF);
  return eff;
 }
 function getCurrentLossInfo(amps){
@@ -150,14 +149,27 @@ function clearSky(date,h){
  const ghi=1098*s*Math.exp(-0.059/s), g=clamp(Math.max(0,cosA)/s,0,3);
  return{ghi,kw:KWP*PR*ghi*(0.8*g+0.2)/1000};
 }
-function calib(date,obs){return clamp(obs/clearSky(date.slice(0,4)+'-10-15',10).kw,0.3,3);}
+function solarAutoScale(date){
+ if(online && online[date]){
+  const values=Object.values(online[date]).filter(v=>Number(v)>0);
+  if(values.length){
+   const peak=Math.max(...values);
+   const noon=clearSky(date,12).kw;
+   if(noon>0){
+    return clamp(peak / (noon*1000), 0.35, 1.6);
+   }
+  }
+ }
+ return 1;
+}
 function solarAt(p,slot,mid){
  const c=clearSky(p.date,mid);
  let sky=1-0.75*Math.pow(p.cloud/100,1.5);
  const o=online&&online[p.date]&&online[p.date][slot+1];
  const cs=clearSky(p.date,slot+0.5).ghi;
  if(!manualCloud&&o!=null&&cs>30)sky=clamp(o/cs,0,1.1);
- return Math.min(PEAK,Math.max(0,c.kw*p.k*sky));
+ const autoScale=solarAutoScale(p.date);
+ return Math.min(PEAK,Math.max(0,c.kw*autoScale*sky));
 }
 async function loadWeather(){
  const date=$('date').value;
@@ -203,11 +215,10 @@ function sim(p,amps){
 function calculate(){
  const date=$('date').value,start=parseHour($('start').value),end=parseHour($('end').value);
  if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l\'ora finale deve essere dopo quella iniziale.';return;}
- const obs=clamp(Number($('obs').value)||1.8,0.1,5);
  const p={date,start,end,car:clamp(Number($('carSoc').value)||0,0,100),home:clamp(Number($('homeSoc').value)||0,0,100),
   target:clamp(Number($('target').value)||100,1,100),cloud:clamp(Number($('cloud').value)||0,0,100),
   base:Math.max(0,Number($('base').value)||0),reserve:clamp(Number($('reserve').value)||0,0,90),
-  chg:Math.max(0.1,Number($('chg').value)||2),dis:Math.max(0.1,Number($('dis').value)||2.5),k:calib(date,obs)};
+  chg:Math.max(0.1,Number($('chg').value)||2),dis:Math.max(0.1,Number($('dis').value)||2.5)};
  const amps=Number($('amps').value);
  const lossInfo=getCurrentLossInfo(amps);
  const R=sim(p,amps),t=R.t;
@@ -234,13 +245,12 @@ function calculate(){
  else{st=`PIANO SUFFICIENTE: l'auto arriva al ${p.target}%.`;cls='good';}
  $('status').className='status '+cls;$('status').textContent=st;
  const rr=R.rows.find(r=>r.atRes),resMsg=rr?` La batteria di casa arriva alla riserva minima (${p.reserve}%) alle ${String(rr.h).padStart(2,'0')}:00: da quel momento non può più scaricare e l'auto si ricarica solo con il FV disponibile (colonna Corrente auto). Per usarla di più, abbassa la riserva minima.`:'';
- const c10=Math.min(PEAK,clearSky(date,10).kw*p.k);
- $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW; a cielo sereno alle 10:00 il modello dà ${fmt(c10,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato a isola (senza rete): quando il FV è sotto la potenza dell'auto, la differenza arriva dalla batteria di casa (fino a ${fmt(p.dis,1)} kW). Se non basta, la corrente dell'auto viene ridotta (minimo 6 A) o la ricarica si sospende. Rendimento stimato a ${amps} A: ${fmt(lossInfo.effPct,1)}%. ${resMsg}`;
+ $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato a isola (senza rete): quando il FV è sotto la potenza dell'auto, la differenza arriva dalla batteria di casa (fino a ${fmt(p.dis,1)} kW). Se non basta, la corrente dell'auto viene ridotta (minimo 6 A) o la ricarica si sospende. Rendimento stimato a ${amps} A: ${fmt(lossInfo.effPct,1)}%. ${resMsg}`;
 }
 $('calc').addEventListener('click',calculate);
 $('weather').addEventListener('click',loadWeather);
 $('cloud').addEventListener('input',()=>{manualCloud=true;if(online)$('weatherMsg').textContent='Nuvolosità modificata a mano: uso questo valore al posto della radiazione online. Premi "Aggiorna meteo online" per tornare ai dati previsti.';calculate();});
-['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','obs','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi "Aggiorna meteo online".';calculate();}));
+['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi "Aggiorna meteo online".';calculate();}));
 function registerServiceWorker(){
  if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
