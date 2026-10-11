@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#123b35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BYD Solar">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/battery-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/battery-icon.svg">
+<title>Ricarica Solare BYD – Llíria</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#18212f;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0;padding:16px;max-width:980px;margin-inline:auto}
+header{padding:20px 18px;background:#123b35;color:white;border-radius:18px;margin-bottom:14px}
+h1{font-size:1.45rem;margin:0 0 6px}header p{margin:0;color:#d5e9e4;font-size:.94rem}
+.card{background:white;border:1px solid #dce4ea;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 8px #172b3b3a}
+h2{font-size:1.08rem;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;font-size:.88rem;font-weight:650;margin-bottom:5px}input,select,button{font:inherit}input,select{width:100%;padding:11px;border:1px solid #bdc9d2;border-radius:10px;background:white;color:#18212f}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #2c997755;outline-offset:1px}
+small,.muted{color:#596979;font-size:.84rem}button{border:0;border-radius:11px;padding:12px 16px;background:#146b57;color:white;font-weight:700;cursor:pointer}button.secondary{background:#e6efec;color:#164c40}button[hidden]{display:none}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric{background:#f2f7f5;border-radius:12px;padding:12px}.metric .v{font-size:1.35rem;font-weight:800;margin-top:4px}.status{padding:12px;border-radius:12px;font-weight:750;margin-top:10px}.good{background:#e2f6e9;color:#135c32}.warn{background:#fff1d6;color:#774500}.bad{background:#fde7e7;color:#8a2020}
+table{border-collapse:collapse;width:100%;font-size:.87rem}th,td{text-align:right;padding:8px 6px;border-bottom:1px solid #e6ebef}th:first-child,td:first-child{text-align:left}th{color:#526272;font-weight:700}.tablewrap{overflow-x:auto}tr.sel td{background:#eef7f3;font-weight:700}
+.bar{height:10px;background:#e8edf0;border-radius:99px;overflow:hidden;margin-top:6px}.bar span{display:block;height:100%;background:#2c9977;width:0}
+details summary{font-weight:700;cursor:pointer}.note{border-left:4px solid #d49b2a;padding:10px 12px;background:#fff9e9;border-radius:6px;font-size:.9rem}
+@media(max-width:600px){body{padding:10px}.card{padding:13px}.metric .v{font-size:1.15rem}}
+</style>
+</head>
+<body>
+<header>
+<h1>☀️ Ricarica Solare BYD – Llíria</h1>
+<p>Pianificatore domestico per BYD ATTO 2 Comfort, fotovoltaico e batterie di casa</p>
+</header>
+
+<section class="card">
+<h2>1. Dati da inserire</h2>
+<div class="grid">
+<div><label for="carSoc">Batteria auto attuale (%)</label><input id="carSoc" type="number" min="0" max="100" value="74" step="1"></div>
+<div><label for="homeSoc">Batteria casa attuale (%)</label><input id="homeSoc" type="number" min="0" max="100" value="38" step="1"></div>
+<div><label for="target">Obiettivo batteria auto (%)</label><input id="target" type="number" min="1" max="100" value="100" step="1"></div>
+<div><label for="cloud">Nuvolosità prevista (%)</label><input id="cloud" type="number" min="0" max="100" value="20" step="5"><small>Con il meteo online viene compilata da sola.</small></div>
+<div><label for="amps">Corrente di ricarica (A)</label><select id="amps"><option>6</option><option>8</option><option selected>10</option><option>13</option><option>16</option></select></div>
+<div><label for="date">Data della simulazione</label><input id="date" type="date"></div>
+<div><label for="start">Ora inizio ricarica</label><input id="start" type="time" value="07:00"></div>
+<div><label for="end">Ora fine ricarica</label><input id="end" type="time" value="18:00"></div>
+<div><label for="base">Consumo base casa (kW)</label><input id="base" type="number" min="0" max="5" value="0.2" step="0.05"></div>
+<div><label for="reserve">Riserva minima batteria casa (%)</label><input id="reserve" type="number" min="0" max="90" value="15" step="1"></div>
+<div><label for="eff">Rendimento massimo caricatore auto (%)</label><input id="eff" type="number" min="70" max="100" value="92" step="1"><small>A piena potenza. A bassa corrente il rendimento reale scende.</small></div>
+<div><label for="meas">Potenza alla batteria auto misurata a 8 A (kW)</label><input id="meas" type="number" min="0.5" max="1.84" value="1.4" step="0.05"><small>Calcolata automaticamente al variare della corrente: usa il valore misurato al 8 A.</small></div>
+</div>
+<h2 style="margin-top:18px">Parametri impianto</h2>
+<div class="grid">
+<div><label for="obs">FV osservato alle 10:00 (kW)</label><input id="obs" type="number" min="0.1" max="5" value="1.8" step="0.1"><small>Valore tipico di metà ottobre a Llíria: calibra la curva solare.</small></div>
+<div><label for="chg">Limite carica batteria casa (kW)</label><input id="chg" type="number" min="0.5" max="10" value="2" step="0.1"></div>
+<div><label for="dis">Limite scarica batteria casa (kW)</label><input id="dis" type="number" min="0.5" max="10" value="2.5" step="0.1"><small>Da confermare sull'inverter.</small></div>
+<div><label for="loc">Posizione fotovoltaica</label><input id="loc" type="text" value="Llíria, Valencia" readonly></div>
+</div>
+<div class="actions">
+<button id="calc">Calcola piano</button>
+<button id="weather" class="secondary">Aggiorna meteo online</button>
+<button id="install" class="secondary" hidden>Installa app</button>
+</div>
+<p id="weatherMsg" class="muted">Il meteo online è facoltativo e richiede Internet. Senza, si usa la nuvolosità inserita a mano.</p>
+</section>
+
+<section class="card">
+<h2>2. Risultato della simulazione</h2>
+<div class="results">
+<div class="metric"><div class="muted">Potenza richiesta dall'auto</div><div class="v" id="evPower">—</div></div>
+<div class="metric"><div class="muted">Energia assorbita dall'auto</div><div class="v" id="gridEnergy">—</div></div>
+<div class="metric"><div class="muted">Energia stimata alla batteria auto</div><div class="v" id="stored">—</div></div>
+<div class="metric"><div class="muted">Batteria auto a fine piano</div><div class="v" id="finalCar">—</div><div class="bar"><span id="carBar"></span></div></div>
+<div class="metric"><div class="muted">Batteria casa a fine piano</div><div class="v" id="finalHome">—</div><div class="bar"><span id="homeBar"></span></div></div>
+<div class="metric"><div class="muted">Produzione FV stimata nella finestra</div><div class="v" id="solarEnergy">—</div></div>
+<div class="metric"><div class="muted">Prelevata dalla batteria casa</div><div class="v" id="battOut">—</div></div>
+<div class="metric"><div class="muted">Carico casa non coperto</div><div class="v" id="gridOut">—</div></div>
+</div>
+<div id="status" class="status warn">Premi “Calcola piano” per ottenere una stima.</div>
+<p id="explain" class="muted"></p>
+</section>
+
+<section class="card">
+<h2>3. Confronto per corrente di ricarica</h2>
+<div class="tablewrap"><table><thead><tr><th>Corrente</th><th>Dalla presa (kW)</th><th>Alla batteria auto (kW)</th><th>Rendimento</th><th>Auto finale</th><th>Da batteria casa (kWh)</th><th>Ore di ricarica</th><th>Casa finale</th></tr></thead><tbody id="cmp"></tbody></table></div>
+<p id="best" class="muted"></p>
+</section>
+
+<section class="card">
+<h2>4. Bilancio orario stimato</h2>
+<div class="tablewrap"><table><thead><tr><th>Ora</th><th>FV (kW)</th><th>Auto (kW)</th><th>Casa (kW)</th><th>Da batteria casa (kW)</th><th>Carica batteria casa (kW)</th><th>Eccedenza FV non usata (kW)</th><th>Corrente auto (A)</th><th>Casa (%)</th></tr></thead><tbody id="rows"></tbody></table></div>
+</section>
+
+<section class="card">
+<details>
+<summary>Parametri tecnici e limiti del modello</summary>
+<ul>
+<li>Fotovoltaico: 10 × 450 W = 4,5 kWp; picco massimo osservato 3,5 kW (usato come tetto).</li>
+<li>Curva solare: posizione del sole calcolata per Llíria, con ora legale. Pannelli ipotizzati inclinati di 30° a sud (da correggere nel codice se diversi: TILT, PAZ). La curva è scalata sul valore osservato alle 10:00 a metà ottobre.</li>
+<li>Con il meteo online la radiazione prevista viene confrontata con quella di cielo sereno. Se modifichi la nuvolosità a mano, il valore inserito sostituisce la radiazione online (fino al prossimo aggiornamento meteo). La nuvolosità riduce la produzione fino a circa il 25% con cielo coperto al 100%.</li>
+<li>Batteria auto: 64,8 kWh utili (verificare sulla versione effettiva). Monofase: potenza auto = 230 V × ampere / 1000. Perdite di ricarica auto: potenza alla batteria = rendimento massimo × potenza dalla presa − perdita fissa. La perdita fissa è ricavata dalla potenza misurata a 8 A, quindi il rendimento cala a correnti basse (caricatore, raffreddamento, elettronica).</li>
+<li>Batteria domestica: 18 kWh nominali, carica massima 2 kW (misurata), scarica 2,5 kW (ipotesi), rendimento 95%. Il FV in eccesso oltre il limite di carica non viene usato (inverter limitato).</li>
+<li>Impianto isolato: nessuna rete. La casa ha la priorità; l'auto riceve solo ciò che resta tra FV e batteria (entro la riserva), con corrente ridotta fino a un minimo di 6 A, altrimenti la ricarica si sospende.</li><li>Inverter: massimo 5 kW totali (FV + batteria).</li>
+<li>Per una previsione precisa servono consumi orari reali e orientamento esatto dei pannelli.</li>
+</ul>
+</details>
+<p class="note"><b>Nota di sicurezza:</b> è uno strumento di pianificazione, non un sistema di controllo dell'inverter o del caricatore. Non cambia l'amperaggio del V2C Trydan. Se l'inverter o il circuito hanno limiti inferiori, prevalgono quelli.</p>
+</section>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmt=(n,d=1)=>Number(n).toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d});
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const rad=Math.PI/180;
+const lat=39.68,lon=-0.63,KWP=4.5,PR=0.82,TILT=30,PAZ=0,PEAK=3.5,CAR=64.8,HOME=18,INV=5,AMPS=[6,8,10,13,16];
+let online=null,manualCloud=false,deferredPrompt=null;
+function localDateString(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+$('date').value=localDateString();
+function parseHour(v){const [h,m]=v.split(':').map(Number);return h+m/60;}
+function tzOff(date){const h=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:'Europe/Madrid'}).format(new Date(date+'T12:00:00Z')));return h-12;}
+function getCurrentLossInfo(amps, effPct, measured8Kw){
+ const socketPower = 230 * amps / 1000;
+ const maxBatteryPower = (effPct / 100) * socketPower;
+ const fixedLossKw = Math.max(0, ((effPct / 100) * 230 * 8 / 1000) - (Number(measured8Kw) || 1.4));
+ const powerToBattery = Math.max(0, maxBatteryPower - fixedLossKw);
+ const efficiency = socketPower > 0 ? (powerToBattery / socketPower) * 100 : 0;
+ return { socketPower, maxBatteryPower, fixedLossKw, powerToBattery, efficiency };
+}
+function clearSky(date,h){
+ const [y,m,d]=date.split('-').map(Number);
+ const N=Math.round((Date.UTC(y,m-1,d)-Date.UTC(y,0,0))/864e5);
+ const dec=23.45*Math.sin(2*Math.PI*(284+N)/365)*rad, B=2*Math.PI*(N-81)/364;
+ const eot=9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);
+ const H=15*(h-tzOff(date)+lon/15+eot/60-12)*rad, phi=lat*rad;
+ const s=Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(H);
+ if(s<0.05)return{ghi:0,kw:0};
+ const ce=Math.sqrt(1-s*s);
+ const az=Math.atan2(Math.cos(dec)*Math.sin(H)/ce,(s*Math.sin(phi)-Math.sin(dec))/(ce*Math.cos(phi)));
+ const b=TILT*rad, cosA=s*Math.cos(b)+ce*Math.sin(b)*Math.cos(az-PAZ*rad);
+ const ghi=1098*s*Math.exp(-0.059/s), g=clamp(Math.max(0,cosA)/s,0,3);
+ return{ghi,kw:KWP*PR*ghi*(0.8*g+0.2)/1000};
+}
+function calib(date,obs){return clamp(obs/clearSky(date.slice(0,4)+'-10-15',10).kw,0.3,3);}
+function solarAt(p,slot,mid){
+ const c=clearSky(p.date,mid);
+ let sky=1-0.75*Math.pow(p.cloud/100,1.5);
+ const o=online&&online[p.date]&&online[p.date][slot+1];
+ const cs=clearSky(p.date,slot+0.5).ghi;
+ if(!manualCloud&&o!=null&&cs>30)sky=clamp(o/cs,0,1.1);
+ return Math.min(PEAK,Math.max(0,c.kw*p.k*sky));
+}
+async function loadWeather(){
+ const date=$('date').value;
+ $('weatherMsg').textContent='Recupero della previsione oraria…';
+ try{
+  const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover,shortwave_radiation&timezone=Europe%2FMadrid&forecast_days=7`);
+  if(!r.ok)throw new Error();
+  const data=await r.json();manualCloud=false;online={};const cl={};
+  data.hourly.time.forEach((t,i)=>{const day=t.slice(0,10),hr=Number(t.slice(11,13));(online[day]=online[day]||{})[hr]=data.hourly.shortwave_radiation[i]||0;(cl[day]=cl[day]||[]).push(data.hourly.cloud_cover[i]);});
+  if(cl[date]){$('cloud').value=Math.round(cl[date].reduce((a,b)=>a+b,0)/cl[date].length);$('weatherMsg').textContent='Meteo orario caricato: la produzione segue la radiazione prevista, calibrata sul tuo impianto.';}
+  else $('weatherMsg').textContent='Previsione caricata, ma non per la data scelta: uso la nuvolosità manuale.';
+  calculate();
+ }catch(e){online=null;$('weatherMsg').textContent='Meteo online non disponibile: uso la nuvolosità inserita a mano.';}
+}
+function sim(p,amps){
+ const measured8Kw=Number($('meas').value)||1.4;
+ const lossInfo=getCurrentLossInfo(amps,p.eta*100,measured8Kw);
+ const evKw=lossInfo.powerToBattery; // power at battery for current selection
+ const dcFull=lossInfo.powerToBattery;
+ let socCar=p.car,socHome=p.home;const t={solar:0,ev:0,stored:0,batt:0,unmet:0,chH:0,exp:0,peak:0,maxLoad:0},rows=[];
+ for(let h=Math.floor(p.start);h<Math.ceil(p.end);h++){
+  const frac=Math.min(p.end,h+1)-Math.max(p.start,h);if(frac<=0)continue;
+  const solar=solarAt(p,h,Math.max(p.start,h)+frac/2);
+  const need=Math.max(0,CAR*(p.target-socCar)/100);
+  const availB=Math.min(p.dis,Math.max(0,socHome/100*HOME-p.reserve)*0.95/frac,Math.max(0,INV-solar));
+  let a=Math.min(amps,Math.floor(Math.max(0,solar+availB-p.base)*1000/230));if(a<6)a=0;
+  const acKw=230*a/1000;const dcA=Math.max(0,p.eta*acKw-lossInfo.fixedLossKw);
+  let carKw=0,dc=0;
+  if(need>0&&a>0){if(dcA*frac<=need){carKw=acKw;dc=dcA;}else{dc=need/frac;carKw=(dc+lossInfo.fixedLossKw)/p.eta;}}
+  const total=carKw+p.base;
+  const solarUse=Math.min(solar,total),surplus=solar-solarUse,deficit=total-solarUse;
+  const battKw=Math.min(deficit,availB);
+  const gridKw=deficit-battKw;
+  const room=Math.max(0,HOME*(1-socHome/100));
+  const chgKw=Math.min(surplus,p.chg,room/(0.95*frac));
+  const expKw=surplus-chgKw;
+  socCar=clamp(socCar+dc*frac/CAR*100,0,100);
+  socHome=clamp(socHome-battKw*frac/0.95/HOME*100+chgKw*frac*0.95/HOME*100,p.reserve,100);
+  t.solar+=solar*frac;t.ev+=carKw*frac;t.stored+=dc*frac;t.batt+=battKw*frac;t.unmet+=gridKw*frac;t.chH+=carKw>0?frac:0;t.exp+=expKw*frac;
+  t.peak=Math.max(t.peak,solar);t.maxLoad=Math.max(t.maxLoad,total);
+  rows.push({h,solar,carKw,base:p.base,battKw,chgKw,expKw,a:carKw>0?a:0,socHome,atRes:socHome<=p.reserve+0.01});
+ }
+ return{t,rows,socCar,socHome,evKw,dcFull,lossInfo};
+}
+function calculate(){
+ const date=$('date').value,start=parseHour($('start').value),end=parseHour($('end').value);
+ if(end<=start){$('status').className='status bad';$('status').textContent='Orario non valido: l’ora finale deve essere dopo quella iniziale.';return;}
+ const obs=clamp(Number($('obs').value)||1.8,0.1,5);
+ const p={date,start,end,car:clamp(Number($('carSoc').value)||0,0,100),home:clamp(Number($('homeSoc').value)||0,0,100),
+  target:clamp(Number($('target').value)||100,1,100),cloud:clamp(Number($('cloud').value)||0,0,100),
+  base:Math.max(0,Number($('base').value)||0),reserve:clamp(Number($('reserve').value)||0,0,90),
+  eta:clamp(Number($('eff').value)||92,70,100)/100,chg:Math.max(0.1,Number($('chg').value)||2),dis:Math.max(0.1,Number($('dis').value)||2.5),k:calib(date,obs)};
+ const measured8Kw=Number($('meas').value)||1.4;
+ const amps=Number($('amps').value);
+ const lossInfo=getCurrentLossInfo(amps,p.eta*100,measured8Kw);
+ p.pf=lossInfo.fixedLossKw;
+ const R=sim(p,amps),t=R.t;
+ const finalCar=R.socCar;
+ $('evPower').textContent=fmt(R.evKw,2)+' kW ('+fmt(R.dcFull,2)+' alla batteria, '+fmt(lossInfo.efficiency,1)+'% eff.)';
+ $('gridEnergy').textContent=fmt(t.ev,2)+' kWh';
+ $('stored').textContent=fmt(t.stored,2)+' kWh';
+ $('finalCar').textContent=fmt(finalCar,1)+'%';$('carBar').style.width=finalCar+'%';
+ $('finalHome').textContent=fmt(R.socHome,1)+'%';$('homeBar').style.width=R.socHome+'%';
+ $('solarEnergy').textContent=fmt(t.solar,2)+' kWh';
+ $('battOut').textContent=fmt(t.batt,2)+' kWh';
+ $('gridOut').textContent=fmt(t.unmet,2)+' kWh';
+ $('rows').innerHTML=R.rows.map(r=>`<tr><td>${String(r.h).padStart(2,'0')}:00</td><td>${fmt(r.solar,2)}</td><td>${fmt(r.carKw,2)}</td><td>${fmt(r.base,2)}</td><td>${fmt(r.battKw,2)}</td><td>${fmt(r.chgKw,2)}</td><td>${fmt(r.expKw,2)}</td><td>${r.a||'—'}</td><td>${fmt(r.socHome,1)}%${r.atRes?' 🔋 riserva':''}</td></tr>`).join('')||'<tr><td colspan="9">Nessuna ora di ricarica nella finestra scelta.</td></tr>';
+ const all=AMPS.map(a=>({a,r:sim(p,a)}));
+ const ok=all.filter(x=>x.r.socCar>=p.target-0.1);
+ const best=ok.length?ok.reduce((m,x)=>x.r.socHome>m.r.socHome+0.01?x:m):all.reduce((m,x)=>x.r.socCar>m.r.socCar?x:m);
+ $('cmp').innerHTML=all.map(x=>`<tr class="${x.a===amps?'sel':''}"><td>${x.a} A${x===best?' ⭐':''}</td><td>${fmt(x.r.evKw,2)}</td><td>${fmt(x.r.dcFull,2)}</td><td>${Math.round(x.r.dcFull/x.r.evKw*100)}%</td><td>${fmt(x.r.socCar,1)}%</td><td>${fmt(x.r.t.batt,2)}</td><td>${fmt(x.r.t.chH,1)}</td><td>${fmt(x.r.socHome,1)}%</td></tr>`).join('');
+ $('best').textContent=ok.length?`⭐ Consigliata: ${best.a} A. Raggiunge l’obiettivo lasciando più carica la batteria di casa.`:`⭐ Nessuna corrente raggiunge l’obiettivo nella finestra scelta; ${best.a} A è quella che arriva più in alto.`;
+ let st,cls;
+ if(t.unmet>0.05){st='ATTENZIONE: in alcune ore FV e batteria non coprono nemmeno i consumi della casa.';cls='bad';}
+ else if(t.maxLoad>INV){st='NON COMPATIBILE: carico superiore al limite di 5 kW.';cls='bad';}
+ else if(finalCar<p.target-0.1){st=`RICARICA PARZIALE: FV e batteria nella finestra scelta non portano l’auto al ${p.target}%.`;cls='warn';}
+ else if(R.socHome<=p.reserve+0.01&&t.batt>0.01){st='ATTENZIONE: la batteria di casa arriva alla riserva minima.';cls='warn';}
+ else{st=`PIANO SUFFICIENTE: l’auto arriva al ${p.target}%.`;cls='good';}
+ $('status').className='status '+cls;$('status').textContent=st;
+ const rr=R.rows.find(r=>r.atRes),resMsg=rr?` La batteria di casa arriva alla riserva minima (${p.reserve}%) alle ${String(rr.h).padStart(2,'0')}:00: da quel momento non può più scaricare e l’auto si ricarica solo con il FV disponibile (colonna Corrente auto). Per usarla di più, abbassa la riserva minima.`:'';
+ const c10=Math.min(PEAK,clearSky(date,10).kw*p.k);
+ $('explain').textContent=`Stima per ${date}: ${fmt(t.solar,2)} kWh FV nella finestra, picco ${fmt(t.peak,2)} kW; a cielo sereno alle 10:00 il modello dà ${fmt(c10,2)} kW. Eccedenza FV non usata (oltre il limite di carica di ${fmt(p.chg,1)} kW): ${fmt(t.exp,2)} kWh. Impianto isolato, senza rete: quando il FV è sotto la potenza dell’auto, la differenza arriva dalla batteria di casa (fino a ${fmt(p.dis,1)} kW). Se non basta, la corrente dell’auto viene ridotta (minimo 6 A) o la ricarica si sospende. Dato di calibrazione installato a Llíria (Valencia): perdita fissa stimata ${fmt(lossInfo.fixedLossKw,3)} kW a ${amps} A. ${resMsg}`;
+}
+$('calc').addEventListener('click',calculate);
+$('weather').addEventListener('click',loadWeather);
+$('cloud').addEventListener('input',()=>{manualCloud=true;if(online)$('weatherMsg').textContent='Nuvolosità modificata a mano: uso questo valore al posto della radiazione online. Premi “Aggiorna meteo online” per tornare ai dati previsti.';calculate();});
+['carSoc','homeSoc','target','cloud','amps','start','end','date','base','reserve','eff','meas','obs','chg','dis'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='date'&&online&&!online[$('date').value])$('weatherMsg').textContent='Nessun dato meteo online per questa data: premi “Aggiorna meteo online”.';calculate();}));
+$('amps').addEventListener('change',()=>{
+ const amps=Number($('amps').value);
+ const eff=Number($('eff').value)||92;
+ const measured8Kw=Number($('meas').value)||1.4;
+ const info=getCurrentLossInfo(amps,eff,measured8Kw);
+ $('meas').title=`Potenza stimata a ${amps} A: ${fmt(info.powerToBattery,2)} kW; perdita fissa ≈ ${fmt(info.fixedLossKw,3)} kW.`;
+ calculate();
+});
+function registerServiceWorker(){
+ if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+ }
+}
+function setupInstallPrompt(){
+ const installBtn=$('install');
+ window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredPrompt=e;installBtn.hidden=false;});
+ installBtn.addEventListener('click',async()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt=null;installBtn.hidden=true;
+ });
+}
+registerServiceWorker();setupInstallPrompt();
+loadWeather();
+calculate();
+</script>
+</body>
+</html>

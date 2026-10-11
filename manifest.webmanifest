@@ -1,0 +1,19 @@
+{
+  "name": "Ricarica Solare BYD – Llíria",
+  "short_name": "BYD Solar",
+  "description": "Pianificatore domestico per BYD ATTO 2 con fotovoltaico e batterie di casa",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fa",
+  "theme_color": "#123b35",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "assets/battery-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
